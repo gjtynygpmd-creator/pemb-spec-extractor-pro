@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PEMB Project Workspace</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><div><div class="eyebrow">WESTERN STEEL • ESTIMATING TOOLS</div><h1 id="projectTitle">Project Workspace</h1><p id="projectSubtitle">Loading project…</p></div><div><a class="button secondary" href="index.html">All Projects</a></div></header>
+<main>
+<section class="metrics">
+<div class="metric"><span id="fileCount">0</span><small>Uploaded Files</small></div>
+<div class="metric"><span id="fieldCount">0</span><small>Extracted Fields</small></div>
+<div class="metric"><span id="conflictCount">0</span><small>Conflicts</small></div>
+<div class="metric"><span id="projectState">Draft</span><small>Project Status</small></div>
+</section>
+
+<section class="panel">
+<div class="toolbar"><div><h2>1. Upload Project Documents</h2><p class="muted">Files upload directly to Cloudflare R2 and are recorded in Neon.</p></div><button id="clearFiles" class="secondary">Clear Selection</button></div>
+<label class="dropzone" id="dropzone"><input id="fileInput" type="file" multiple accept=".pdf,.zip,.tif,.tiff,.png,.jpg,.jpeg,.docx,.xlsx,.dwg,.dxf"><strong>Drop large project files here</strong><span>Specifications, architectural drawings, structural drawings, schedules, ZIP packages, and scans.</span></label>
+<div class="upload-toolbar"><span class="muted">16 MB multipart upload with per-file progress</span><button id="uploadBtn">Upload Selected Files</button></div>
+<div id="pendingFiles" class="file-list"></div><div id="uploadMessage" class="analysis-status"></div>
+</section>
+
+<section class="panel">
+<div class="toolbar"><div><h2>2. Uploaded Files</h2><p class="muted">Persistent source files currently associated with this project.</p></div><button id="refreshBtn" class="secondary">Refresh</button></div>
+<div id="storedFiles" class="stored-list"></div>
+</section>
+
+<section class="panel">
+<div class="toolbar"><div><h2>3. Processing</h2><p class="muted">Start the first inspection job after all source files are uploaded.</p></div><button id="analyzeBtn">Start Analysis</button></div>
+<div id="jobs" class="jobs empty">No processing jobs yet.</div>
+<div id="jobMessage" class="analysis-status"></div>
+</section>
+
+<section class="panel">
+<h2>4. Extracted PEMB Data</h2>
+<p class="muted">This table will populate when the OCR/extraction worker is added in the next milestone.</p>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Field</th><th>Value</th><th>Confidence</th><th>Source</th><th>Status</th></tr></thead><tbody id="fieldsBody"></tbody></table></div>
+</section>
+</main>
+<script src="project.js"></script>
+</body></html>
