@@ -203,7 +203,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.6.0 Estimator Core started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.6.1 Insulation Core started; poll interval=%ss", POLL_SECONDS)
     while True:
         job_id = claim_job()
         if job_id:

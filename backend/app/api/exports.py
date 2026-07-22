@@ -88,7 +88,9 @@ def export_zoho_csv(project_id: str, db: Session = Depends(get_db)):
         "Bid Due", "Customer", "Project Name", "Project Address", "Building Width", "Building Length",
         "Total Square Feet", "Frame Type", "Ridge Offset", "BSW Eave Height", "FSW Eave Height",
         "Roof Panel Type", "Front Roof Slope", "Back Roof Slope", "Roof Panel Gauge", "Wall Panel Type",
-        "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Risk Category", "Building Code",
+        "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Roof Insulation Type", "Roof Insulation R-Value",
+        "Roof Insulation Thickness", "Roof Insulation Facing", "Wall Insulation Type", "Wall Insulation R-Value",
+        "Wall Insulation Thickness", "Wall Insulation Facing", "Risk Category", "Building Code",
         "Roof Live Load", "Dead Load", "Collateral Load", "Ground Snow Load", "Roof Snow Load",
         "Basic Wind Speed", "Wind Exposure", "Site Class", "Seismic Design Category", "S1", "Ss", "Estimator Notes"
     ]
@@ -117,7 +119,7 @@ def export_xlsx(project_id: str, db: Session = Depends(get_db)):
     wb = Workbook()
     summary = wb.active
     summary.title = "Project Summary"
-    summary.append(["PEMB Spec Extractor Pro", "v1.6.0 Estimator Core"])
+    summary.append(["PEMB Spec Extractor Pro", "v1.6.1 Insulation Core"])
     summary.append(["Project Name", project.name])
     summary.append(["Customer", project.customer or ""])
     summary.append(["Address", project.address or ""])
@@ -154,7 +156,9 @@ def export_xlsx(project_id: str, db: Session = Depends(get_db)):
         "Bid Due", "Customer", "Project Name", "Project Address", "Building Width", "Building Length",
         "Total Square Feet", "Frame Type", "Ridge Offset", "BSW Eave Height", "FSW Eave Height",
         "Roof Panel Type", "Front Roof Slope", "Back Roof Slope", "Roof Panel Gauge", "Wall Panel Type",
-        "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Risk Category", "Building Code",
+        "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Roof Insulation Type", "Roof Insulation R-Value",
+        "Roof Insulation Thickness", "Roof Insulation Facing", "Wall Insulation Type", "Wall Insulation R-Value",
+        "Wall Insulation Thickness", "Wall Insulation Facing", "Risk Category", "Building Code",
         "Roof Live Load", "Dead Load", "Collateral Load", "Ground Snow Load", "Roof Snow Load",
         "Basic Wind Speed", "Wind Exposure", "Site Class", "Seismic Design Category", "S1", "Ss", "Estimator Notes"
     ]
@@ -199,8 +203,14 @@ REQUIRED_EXPORT_FIELDS = [
     ("Codes & Loads", "Seismic Design Category"),
     ("Roof", "Roof Panel"),
     ("Walls", "Wall Panel"),
-    ("Insulation", "Roof Insulation"),
-    ("Insulation", "Wall Insulation"),
+    ("Insulation", "Roof Insulation Type"),
+    ("Insulation", "Roof Insulation R-Value"),
+    ("Insulation", "Roof Insulation Thickness"),
+    ("Insulation", "Roof Insulation Facing"),
+    ("Insulation", "Wall Insulation Type"),
+    ("Insulation", "Wall Insulation R-Value"),
+    ("Insulation", "Wall Insulation Thickness"),
+    ("Insulation", "Wall Insulation Facing"),
     ("Openings", "Overhead Door"),
     ("Accessories", "Gutters"),
     ("Accessories", "Downspouts"),

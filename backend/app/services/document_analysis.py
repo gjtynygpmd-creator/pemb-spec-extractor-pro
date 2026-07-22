@@ -99,6 +99,38 @@ FIELD_RULES: tuple[FieldRule, ...] = (
         r"wall\s+insulation(?:\s+system)?[^\n]{0,120}?\b(R\s*[-]?\s*\d+(?:\.\d+)?)\b",
         r"\b(R\s*[-]?\s*\d+(?:\.\d+)?)\b[^\n]{0,80}wall\s+insulation",
     ), 0.84, ("specification",), ("07", "13")),
+    FieldRule("Insulation", "Roof Insulation Type", (
+        r"roof\s+insulation(?:\s+system)?[^\n]{0,100}?\b(fiberglass|blanket|batt|rigid(?:[- ]board)?|polyisocyanurate|polyiso|spray[- ]foam|insulated\s+metal\s+panel|IMP|liner\s+system)\b",
+        r"\b(fiberglass|blanket|batt|rigid(?:[- ]board)?|polyisocyanurate|polyiso|spray[- ]foam|insulated\s+metal\s+panel|IMP)\b[^\n]{0,100}?roof",
+    ), 0.86, ("specification", "roof_plan", "wall_section"), ("07", "13")),
+    FieldRule("Insulation", "Roof Insulation R-Value", (
+        r"roof\s+insulation(?:\s+system)?[^\n]{0,140}?\b(R\s*[-]?\s*\d+(?:\.\d+)?)\b",
+        r"\b(R\s*[-]?\s*\d+(?:\.\d+)?)\b[^\n]{0,100}?(?:roof|purlin)",
+    ), 0.91, ("specification", "roof_plan", "wall_section"), ("07", "13")),
+    FieldRule("Insulation", "Roof Insulation Thickness", (
+        r"roof\s+insulation[^\n]{0,140}?\b(\d+(?:\.\d+)?(?:-\d+/\d+)?\s*(?:inches|inch|in\.?|\"))\b",
+        r"\b(\d+(?:\.\d+)?(?:-\d+/\d+)?\s*(?:inches|inch|in\.?|\"))\b[^\n]{0,80}?(?:roof\s+insulation|roof\s+batt)",
+    ), 0.84, ("specification", "roof_plan", "wall_section"), ("07", "13")),
+    FieldRule("Insulation", "Roof Insulation Facing", (
+        r"roof\s+insulation[^\n]{0,180}?\b(white\s+vinyl|vinyl[- ]faced|foil[- ]faced|FSK|WMP[- ]?VR|VRR|vapor\s+retarder)\b",
+        r"\b(white\s+vinyl|vinyl[- ]faced|foil[- ]faced|FSK|WMP[- ]?VR|VRR)\b[^\n]{0,100}?roof",
+    ), 0.84, ("specification", "roof_plan", "wall_section"), ("07", "13")),
+    FieldRule("Insulation", "Wall Insulation Type", (
+        r"wall\s+insulation(?:\s+system)?[^\n]{0,100}?\b(fiberglass|blanket|batt|rigid(?:[- ]board)?|polyisocyanurate|polyiso|spray[- ]foam|insulated\s+metal\s+panel|IMP|liner\s+system)\b",
+        r"\b(fiberglass|blanket|batt|rigid(?:[- ]board)?|polyisocyanurate|polyiso|spray[- ]foam|insulated\s+metal\s+panel|IMP)\b[^\n]{0,100}?wall",
+    ), 0.86, ("specification", "elevation", "wall_section"), ("07", "13")),
+    FieldRule("Insulation", "Wall Insulation R-Value", (
+        r"wall\s+insulation(?:\s+system)?[^\n]{0,140}?\b(R\s*[-]?\s*\d+(?:\.\d+)?)\b",
+        r"\b(R\s*[-]?\s*\d+(?:\.\d+)?)\b[^\n]{0,100}?(?:wall|girt)",
+    ), 0.91, ("specification", "elevation", "wall_section"), ("07", "13")),
+    FieldRule("Insulation", "Wall Insulation Thickness", (
+        r"wall\s+insulation[^\n]{0,140}?\b(\d+(?:\.\d+)?(?:-\d+/\d+)?\s*(?:inches|inch|in\.?|\"))\b",
+        r"\b(\d+(?:\.\d+)?(?:-\d+/\d+)?\s*(?:inches|inch|in\.?|\"))\b[^\n]{0,80}?(?:wall\s+insulation|wall\s+batt)",
+    ), 0.84, ("specification", "elevation", "wall_section"), ("07", "13")),
+    FieldRule("Insulation", "Wall Insulation Facing", (
+        r"wall\s+insulation[^\n]{0,180}?\b(white\s+vinyl|vinyl[- ]faced|foil[- ]faced|FSK|WMP[- ]?VR|VRR|vapor\s+retarder)\b",
+        r"\b(white\s+vinyl|vinyl[- ]faced|foil[- ]faced|FSK|WMP[- ]?VR|VRR)\b[^\n]{0,100}?wall",
+    ), 0.84, ("specification", "elevation", "wall_section"), ("07", "13")),
     FieldRule("Envelope", "Roof Panel Type", (
         r"(?:roof\s+panel|roofing)\s*[:\-]?\s*([^\n.;]{4,100}(?:standing\s+seam|panel)[^\n.;]{0,60})",
         r"((?:mechanically\s+seamed|vertical\s+rib|trapezoidal)[^\n.;]{0,70}standing\s+seam[^\n.;]{0,50})",
@@ -339,7 +371,9 @@ CORE_ESTIMATOR_FIELDS = {
     "Project Address", "Bid Due", "Building Width", "Building Length", "Total Square Feet",
     "Frame Type", "Ridge Offset", "BSW Eave Height", "FSW Eave Height", "Eave Height",
     "Roof Panel Type", "Front Roof Slope", "Back Roof Slope", "Roof Slope", "Roof Panel Gauge",
-    "Wall Panel Type", "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Risk Category",
+    "Wall Panel Type", "Wall Panel Gauge", "Roof Insulation", "Wall Insulation",
+    "Roof Insulation Type", "Roof Insulation R-Value", "Roof Insulation Thickness", "Roof Insulation Facing",
+    "Wall Insulation Type", "Wall Insulation R-Value", "Wall Insulation Thickness", "Wall Insulation Facing", "Risk Category",
     "Building Code", "Roof Live Load", "Dead Load", "Collateral Load", "Ground Snow Load",
     "Roof Snow Load", "Basic Wind Speed", "Wind Exposure", "Site Class", "Seismic Design Category",
     "S1", "Ss", "Occupancy"
