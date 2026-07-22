@@ -1,8 +1,8 @@
-# PEMB Spec Extractor Pro v1.5.1
+# PEMB Spec Extractor Pro v1.6.0
 
-## Universal Field Finder Release
+## Estimator Core Release
 
-v1.5.1 retains Excel, full CSV, Zoho CSV, and PDF exports and improves the searchable-text extraction pipeline.
+v1.6.0 retains Excel, full CSV, Zoho CSV, and PDF exports and improves the searchable-text extraction pipeline.
 
 ### Improvements
 - Searches every searchable PDF page, including `unclassified` pages.

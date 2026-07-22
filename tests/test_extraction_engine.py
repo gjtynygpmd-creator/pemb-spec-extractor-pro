@@ -32,3 +32,18 @@ def test_universal_design_load_table():
 def test_rejects_definition_text_as_geometry():
     values = as_map("Building Width: Measured from outside to outside of sidewalls")
     assert "Building Width" not in values
+
+
+def test_rejects_material_paragraph_as_accessory():
+    values = as_map("Downspouts: Zinc-coated (galvanized) or aluminum-zinc alloy-coated steel sheet")
+    assert "Downspouts" not in values
+
+def test_normalizes_occupancy_group():
+    values = as_map("IBC Occupancy Type: S-1")
+    assert values["Occupancy"] == "S-1"
+
+def test_separate_sidewall_geometry():
+    values = as_map("BSW Eave Height: 24'-0\"\nFSW Eave Height: 30'-0\"\nRidge Offset: 18'-0\"")
+    assert values["BSW Eave Height"].startswith("24")
+    assert values["FSW Eave Height"].startswith("30")
+    assert values["Ridge Offset"].startswith("18")

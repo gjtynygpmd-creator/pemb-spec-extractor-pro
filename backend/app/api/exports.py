@@ -85,12 +85,12 @@ def export_zoho_csv(project_id: str, db: Session = Depends(get_db)):
     project, fields = _load(project_id, db)
     mapping = _latest_field_map(fields)
     standard_columns = [
-        "Project Name", "Customer", "Project Address", "Bid Due", "Building Width", "Building Length",
-        "Eave Height", "Roof Slope", "Building Code", "Risk Category", "Basic Wind Speed",
-        "Wind Exposure", "Ground Snow Load", "Roof Live Load", "Seismic Design Category",
-        "Roof Panel", "Roof Panel Gauge", "Wall Panel", "Wall Panel Gauge", "Roof Insulation",
-        "Wall Insulation", "Overhead Door", "Gutters", "Downspouts", "Canopies", "Louvers",
-        "Paint System", "Warranty", "Estimator Notes"
+        "Bid Due", "Customer", "Project Name", "Project Address", "Building Width", "Building Length",
+        "Total Square Feet", "Frame Type", "Ridge Offset", "BSW Eave Height", "FSW Eave Height",
+        "Roof Panel Type", "Front Roof Slope", "Back Roof Slope", "Roof Panel Gauge", "Wall Panel Type",
+        "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Risk Category", "Building Code",
+        "Roof Live Load", "Dead Load", "Collateral Load", "Ground Snow Load", "Roof Snow Load",
+        "Basic Wind Speed", "Wind Exposure", "Site Class", "Seismic Design Category", "S1", "Ss", "Estimator Notes"
     ]
     values = {
         "Project Name": project.name,
@@ -117,7 +117,7 @@ def export_xlsx(project_id: str, db: Session = Depends(get_db)):
     wb = Workbook()
     summary = wb.active
     summary.title = "Project Summary"
-    summary.append(["PEMB Spec Extractor Pro", "v1.5.1 Core Extraction"])
+    summary.append(["PEMB Spec Extractor Pro", "v1.6.0 Estimator Core"])
     summary.append(["Project Name", project.name])
     summary.append(["Customer", project.customer or ""])
     summary.append(["Address", project.address or ""])
@@ -148,14 +148,15 @@ def export_xlsx(project_id: str, db: Session = Depends(get_db)):
         row[2].alignment = Alignment(wrap_text=True, vertical="top")
         row[9].alignment = Alignment(wrap_text=True, vertical="top")
 
-    zoho = wb.create_sheet("Zoho Import")
+    zoho = wb.create_sheet("Estimator Input")
     mapping = _latest_field_map(fields)
     columns = [
-        "Project Name", "Customer", "Project Address", "Bid Due", "Building Width", "Building Length",
-        "Eave Height", "Roof Slope", "Building Code", "Risk Category", "Basic Wind Speed", "Wind Exposure",
-        "Ground Snow Load", "Roof Live Load", "Seismic Design Category", "Roof Panel", "Roof Panel Gauge",
-        "Wall Panel", "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Overhead Door", "Gutters",
-        "Downspouts", "Canopies", "Louvers", "Paint System", "Warranty", "Estimator Notes"
+        "Bid Due", "Customer", "Project Name", "Project Address", "Building Width", "Building Length",
+        "Total Square Feet", "Frame Type", "Ridge Offset", "BSW Eave Height", "FSW Eave Height",
+        "Roof Panel Type", "Front Roof Slope", "Back Roof Slope", "Roof Panel Gauge", "Wall Panel Type",
+        "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Risk Category", "Building Code",
+        "Roof Live Load", "Dead Load", "Collateral Load", "Ground Snow Load", "Roof Snow Load",
+        "Basic Wind Speed", "Wind Exposure", "Site Class", "Seismic Design Category", "S1", "Ss", "Estimator Notes"
     ]
     zoho.append(columns)
     row = []
@@ -237,7 +238,7 @@ def _build_pdf(project, fields) -> bytes:
     small = ParagraphStyle("Small", parent=body, fontSize=7.5, leading=9, textColor=muted)
     white_body = ParagraphStyle("WhiteBody", parent=body, textColor=colors.white, fontName="Helvetica-Bold")
     story = [
-        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.5.1 UNIVERSAL FIELD FINDER", eyebrow),
+        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.6.0 ESTIMATOR CORE", eyebrow),
         Paragraph(_pdf_text(project.name), title_style),
         Paragraph("Estimator summary generated from reviewed, extracted, and manually entered project data.", small),
         Spacer(1, 10),

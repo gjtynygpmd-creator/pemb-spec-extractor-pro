@@ -2,10 +2,11 @@ const API_BASE=(window.PEMB_API_BASE||localStorage.getItem('pembApiBase')||'http
 const PROJECT_ID=new URLSearchParams(location.search).get('id');
 const PART_SIZE=16*1024*1024;
 const REQUIRED_FIELDS=[
- ['Project','Project Address'],['Geometry','Building Width'],['Geometry','Building Length'],['Geometry','Eave Height'],['Geometry','Roof Slope'],
- ['Codes & Loads','Building Code'],['Codes & Loads','Risk Category'],['Codes & Loads','Basic Wind Speed'],['Codes & Loads','Wind Exposure'],['Codes & Loads','Ground Snow Load'],['Codes & Loads','Roof Live Load'],['Codes & Loads','Seismic Design Category'],
- ['Envelope','Roof Panel Gauge'],['Envelope','Wall Panel Gauge'],['Envelope','Roof Insulation'],['Envelope','Wall Insulation'],
- ['Openings','Overhead Door'],['Accessories','Gutters'],['Accessories','Downspouts']
+ ['Project','Bid Due'],['Project','Customer'],['Project','Project Name'],['Project','Project Address'],
+ ['Geometry','Building Width'],['Geometry','Building Length'],['Geometry','Total Square Feet'],['Framing','Frame Type'],['Geometry','Ridge Offset'],['Geometry','BSW Eave Height'],['Geometry','FSW Eave Height'],
+ ['Envelope','Roof Panel Type'],['Geometry','Front Roof Slope'],['Geometry','Back Roof Slope'],['Envelope','Roof Panel Gauge'],['Envelope','Wall Panel Type'],['Envelope','Wall Panel Gauge'],['Envelope','Roof Insulation'],['Envelope','Wall Insulation'],
+ ['Codes & Loads','Risk Category'],['Codes & Loads','Building Code'],['Codes & Loads','Roof Live Load'],['Codes & Loads','Dead Load'],['Codes & Loads','Collateral Load'],['Codes & Loads','Ground Snow Load'],['Codes & Loads','Roof Snow Load'],['Codes & Loads','Basic Wind Speed'],['Codes & Loads','Wind Exposure'],
+ ['Codes & Loads','Site Class'],['Codes & Loads','Seismic Design Category'],['Codes & Loads','S1'],['Codes & Loads','Ss']
 ];
 let selected=[],workspace=null,pollTimer=null,activeField=null;
 const $=id=>document.getElementById(id);

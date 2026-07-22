@@ -152,9 +152,13 @@ def process_job(job_id: str):
             for field_name, candidates in all_candidates.items():
                 if field_name in manual_names:
                     continue
-                unique_values = {normalized_compare(c["value"]) for c in candidates}
+                ranked = sorted(candidates, key=lambda c: (c["confidence"], len(c.get("source_excerpt") or "")), reverse=True)
+                best = ranked[0]
+                # Only flag a conflict when a materially different candidate is nearly as authoritative.
+                # Weak keyword hits no longer force a valid high-confidence value into conflict status.
+                credible = [c for c in ranked if c["confidence"] >= max(0.78, best["confidence"] - 0.06)]
+                unique_values = {normalized_compare(c["value"]) for c in credible}
                 status = "conflict" if len(unique_values) > 1 else "review"
-                best = sorted(candidates, key=lambda c: (c["confidence"], len(c.get("source_excerpt") or "")), reverse=True)[0]
                 db.add(ExtractedField(
                     project_id=job.project_id,
                     category=best["category"],
@@ -172,7 +176,7 @@ def process_job(job_id: str):
 
             event(db, job, "checking_conflicts", 94, "Checking duplicate values and conflicts")
             field_count = len([name for name in all_candidates if name not in manual_names]) + len(manual_names)
-            conflict_count = sum(1 for name, items in all_candidates.items() if name not in manual_names and len({normalized_compare(x['value']) for x in items}) > 1)
+            conflict_count = sum(1 for name, items in all_candidates.items() if name not in manual_names and len({normalized_compare(x['value']) for x in items if x['confidence'] >= max(0.78, max(y['confidence'] for y in items)-0.06)}) > 1)
             job.status = "completed"
             job.stage = "completed"
             job.progress = 100
@@ -199,7 +203,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.5.1 started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.6.0 Estimator Core started; poll interval=%ss", POLL_SECONDS)
     while True:
         job_id = claim_job()
         if job_id:

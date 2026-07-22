@@ -15,7 +15,7 @@ class FieldRule:
     preferred_divisions: tuple[str, ...] = ()
 
 
-# v1.5 focuses on practical PEMB estimating data. Patterns intentionally allow
+# v1.6 Estimator Core focuses on practical PEMB estimating data. Patterns intentionally allow
 # broken spacing and punctuation commonly produced by PDF drawing/spec text.
 FIELD_RULES: tuple[FieldRule, ...] = (
     FieldRule("Project", "Project Address", (
@@ -163,6 +163,30 @@ FIELD_RULES: tuple[FieldRule, ...] = (
     FieldRule("Accessories", "Ridge Vents", (
         r"((?:gravity\s+)?ridge\s+vents?[^\n.;]{0,140})",
     ), 0.77, ("specification",), ("13",)),
+    FieldRule("Project", "Project Name", (
+        r"(?:project\s+name|project)\s*[:=\-]?\s*([^\n]{5,100})",
+    ), 0.70, ("general_notes", "specification")),
+    FieldRule("Project", "Bid Due", (
+        r"(?:bid\s+due|bids?\s+(?:will\s+be\s+)?received(?:\s+until)?)\s*[:=\-]?\s*([^\n.;]{5,80})",
+    ), 0.78, ("general_notes", "specification")),
+    FieldRule("Geometry", "BSW Eave Height", (
+        r"(?:back\s+sidewall|bsw)\s+(?:eave\s+)?height\s*[:=\-]?\s*((?:\d+\s*['’]\s*(?:\d+(?:\s+\d+/\d+)?\s*[\"”])?)|(?:\d+(?:\.\d+)?\s*(?:ft|feet)))",
+    ), 0.90, ("elevation", "wall_section", "structural_notes")),
+    FieldRule("Geometry", "FSW Eave Height", (
+        r"(?:front\s+sidewall|fsw)\s+(?:eave\s+)?height\s*[:=\-]?\s*((?:\d+\s*['’]\s*(?:\d+(?:\s+\d+/\d+)?\s*[\"”])?)|(?:\d+(?:\.\d+)?\s*(?:ft|feet)))",
+    ), 0.90, ("elevation", "wall_section", "structural_notes")),
+    FieldRule("Geometry", "Ridge Offset", (
+        r"ridge\s+offset\s*[:=\-]?\s*((?:\d+\s*['’]\s*(?:\d+(?:\s+\d+/\d+)?\s*[\"”])?)|(?:\d+(?:\.\d+)?\s*(?:ft|feet)))",
+    ), 0.88, ("roof_plan", "elevation", "framing_plan")),
+    FieldRule("Geometry", "Front Roof Slope", (
+        r"(?:front|fsw)\s+roof\s+(?:slope|pitch)\s*[:=\-]?\s*([0-9.]+\s*(?::|/)\s*12)",
+    ), 0.93, ("roof_plan", "elevation")),
+    FieldRule("Geometry", "Back Roof Slope", (
+        r"(?:back|bsw)\s+roof\s+(?:slope|pitch)\s*[:=\-]?\s*([0-9.]+\s*(?::|/)\s*12)",
+    ), 0.93, ("roof_plan", "elevation")),
+    FieldRule("Codes & Loads", "Dead Load", (
+        r"(?:roof\s+)?dead\s+load\s*[:=\-–—]?\s*(\d+(?:\.\d+)?)\s*psf",
+    ), 0.91, ("structural_notes", "specification"), ("13",)),
 )
 
 
@@ -240,11 +264,11 @@ def classify_page(text: str) -> tuple[str, str | None, str | None, str | None]:
     categories = (
         ("structural_notes", ("STRUCTURAL GENERAL NOTES", "DESIGN CRITERIA", "DESIGN LOADS")),
         ("general_notes", ("GENERAL NOTES",)),
-        ("elevation", ("EXTERIOR ELEVATION", "BUILDING ELEVATION", "ELEVATIONS")),
+        ("door_schedule", ("DOOR SCHEDULE", "OVERHEAD DOOR SCHEDULE", "WINDOW SCHEDULE")),
         ("roof_plan", ("ROOF PLAN",)),
+        ("framing_plan", ("ROOF FRAMING PLAN", "MEZZANINE FRAMING PLAN", "FRAMING PLAN")),
         ("foundation_plan", ("FOUNDATION PLAN",)),
-        ("framing_plan", ("FRAMING PLAN", "ROOF FRAMING PLAN")),
-        ("door_schedule", ("DOOR SCHEDULE", "OVERHEAD DOOR SCHEDULE")),
+        ("elevation", ("EXTERIOR ELEVATION", "BUILDING ELEVATION", "ELEVATIONS")),
         ("wall_section", ("WALL SECTION",)),
         ("specification", ("SECTION ", "PART 1 - GENERAL", "PART 1  GENERAL", "PART 2 - PRODUCTS", "PART 2 PRODUCTS")),
     )
@@ -278,13 +302,70 @@ def _rule_confidence(rule: FieldRule, page_type: str | None, division: str | Non
     return max(0.40, min(0.99, score))
 
 
+def _validate_targeted_value(field_name: str, value: str, excerpt: str) -> str | None:
+    value = normalize_space(value)
+    compact = value.lower()
+    numeric_fields = {"Building Width", "Building Length", "Eave Height", "BSW Eave Height", "FSW Eave Height", "Ridge Offset"}
+    if field_name in numeric_fields and not re.search(r"\d\s*(?:ft|feet|['’])|\d+\s*[-']\s*\d+", value, re.I):
+        return None
+    if field_name in {"Roof Slope", "Front Roof Slope", "Back Roof Slope"} and not re.fullmatch(r"[0-9.]+\s*(?::|/)\s*12", value):
+        return None
+    if field_name == "Building Code" and re.fullmatch(r"(?:19|20)\d{2}", value):
+        value = value + " IBC"
+    if field_name == "Occupancy":
+        m = re.search(r"\b([A-HI-RS-U](?:-\d)?)\b", value.upper())
+        if not m: return None
+        value = m.group(1)
+    if field_name == "Roof Panel Type":
+        allowed = re.search(r"(standing\s+seam|ssr|pbr|r[- ]?panel|concealed[- ]fastener|loc\s+seam|trapezoidal)", value, re.I)
+        if not allowed: return None
+        value = allowed.group(1)
+    if field_name == "Wall Panel Type":
+        allowed = re.search(r"(pbr|r[- ]?panel|insulated\s+metal\s+panel|imp|concealed[- ]fastener|metal\s+panel\s+system)", value, re.I)
+        if not allowed: return None
+        value = allowed.group(1)
+    if field_name in {"Gutters", "Downspouts", "Roof Curbs", "Canopies", "Framed Openings", "Ridge Vents"}:
+        # Accessory results must contain an actionable quantity, size, type, or explicit scope statement.
+        if not re.search(r"\d|by\s+pemb|pemb\s+(?:manufacturer|supplier)|provide|include|exclude|not\s+included|size|x\s*\d|gutter|downspout|curb|canop|framed\s+opening|ridge\s+vent", value, re.I):
+            return None
+        if re.search(r"zinc-coated|galvanized.*steel sheet|aluminum-zinc", value, re.I) and not re.search(r"\d|size", value, re.I):
+            return None
+    if len(value) > 100 and field_name not in {"Canopies", "Framed Openings"}:
+        return None
+    return value
+
+
+CORE_ESTIMATOR_FIELDS = {
+    "Project Address", "Bid Due", "Building Width", "Building Length", "Total Square Feet",
+    "Frame Type", "Ridge Offset", "BSW Eave Height", "FSW Eave Height", "Eave Height",
+    "Roof Panel Type", "Front Roof Slope", "Back Roof Slope", "Roof Slope", "Roof Panel Gauge",
+    "Wall Panel Type", "Wall Panel Gauge", "Roof Insulation", "Wall Insulation", "Risk Category",
+    "Building Code", "Roof Live Load", "Dead Load", "Collateral Load", "Ground Snow Load",
+    "Roof Snow Load", "Basic Wind Speed", "Wind Exposure", "Site Class", "Seismic Design Category",
+    "S1", "Ss", "Occupancy"
+}
+
+
 def extract_fields(text: str, page_type: str | None = None, division: str | None = None) -> list[dict]:
     # Search both original text and a line-normalized copy. The second form helps
     # when PDF extraction inserts line breaks between labels and values.
     variants: Iterable[str] = (text, re.sub(r"[\t\r]+", " ", text))
     found: list[dict] = []
     seen: set[tuple[str, str]] = set()
+    # High-value cover-sheet values that commonly appear without explicit field labels.
+    special_rules = (
+        ("Project", "Project Address", r"\b(\d{2,6}\s+[A-Z0-9][A-Z0-9 .'-]{3,70}\s+(?:ROAD|RD|STREET|ST|AVENUE|AVE|DRIVE|DR|BOULEVARD|BLVD|LANE|LN|WAY|HIGHWAY|HWY),?\s+[A-Z .'-]{2,35},?\s+[A-Z]{2}(?:\s+\d{5})?)\b", 0.88),
+        ("Geometry", "Total Square Feet", r"(?:total\s+(?:occupancy\s+)?area|building\s+area|total\s+square\s+feet)\s*[:=\-]?\s*([\d,]+(?:\.\d+)?\s*(?:s\.?f\.?|sq\.?\s*ft\.?|square\s+feet))", 0.92),
+    )
+    for category, field_name, pattern, confidence in special_rules:
+        m = re.search(pattern, text, re.I | re.M)
+        if m:
+            value = normalize_space(m.group(1))
+            seen.add((field_name, normalized_compare(value)))
+            found.append({"category": category, "field_name": field_name, "value": value, "confidence": confidence, "source_excerpt": normalize_space(text[max(0,m.start()-100):min(len(text),m.end()+140)])})
     for rule in FIELD_RULES:
+        if rule.field_name not in CORE_ESTIMATOR_FIELDS:
+            continue
         for variant in variants:
             matched = False
             for pattern in rule.patterns:
@@ -292,6 +373,10 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
                 if not match:
                     continue
                 value = normalize_space(match.group(1))
+                excerpt_start = max(0, match.start() - 140)
+                excerpt_end = min(len(variant), match.end() + 220)
+                excerpt = normalize_space(variant[excerpt_start:excerpt_end])
+                value = _validate_targeted_value(rule.field_name, value, excerpt)
                 if not value or len(value) > 220:
                     continue
                 key = (rule.field_name, normalized_compare(value))
@@ -299,9 +384,6 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
                     matched = True
                     break
                 seen.add(key)
-                excerpt_start = max(0, match.start() - 140)
-                excerpt_end = min(len(variant), match.end() + 220)
-                excerpt = normalize_space(variant[excerpt_start:excerpt_end])
                 found.append({
                     "category": rule.category,
                     "field_name": rule.field_name,
