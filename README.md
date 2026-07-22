@@ -1,8 +1,8 @@
-# PEMB Spec Extractor Pro v1.6.0
+# PEMB Spec Extractor Pro v1.6.1
 
-## Estimator Core Release
+## Insulation Core Release
 
-v1.6.0 retains Excel, full CSV, Zoho CSV, and PDF exports and improves the searchable-text extraction pipeline.
+v1.6.1 retains Excel, full CSV, Zoho CSV, and PDF exports and improves the searchable-text extraction pipeline.
 
 ### Improvements
 - Searches every searchable PDF page, including `unclassified` pages.

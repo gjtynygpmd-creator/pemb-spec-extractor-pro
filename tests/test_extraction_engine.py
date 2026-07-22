@@ -47,3 +47,23 @@ def test_separate_sidewall_geometry():
     assert values["BSW Eave Height"].startswith("24")
     assert values["FSW Eave Height"].startswith("30")
     assert values["Ridge Offset"].startswith("18")
+
+
+def test_detailed_roof_insulation_fields():
+    text = 'Roof insulation system: fiberglass blanket insulation, R-30, 6 inch thickness, white vinyl facing.'
+    fields = extract_fields(text, page_type='specification', division='07')
+    found = {f['field_name']: f['value'] for f in fields}
+    assert found['Roof Insulation R-Value'].replace(' ', '').upper() == 'R-30'
+    assert 'fiberglass' in found['Roof Insulation Type'].lower()
+    assert '6' in found['Roof Insulation Thickness']
+    assert 'vinyl' in found['Roof Insulation Facing'].lower()
+
+
+def test_detailed_wall_insulation_fields():
+    text = 'Wall insulation: foil-faced batt insulation R-19, 4 inch thickness.'
+    fields = extract_fields(text, page_type='wall_section', division='07')
+    found = {f['field_name']: f['value'] for f in fields}
+    assert found['Wall Insulation R-Value'].replace(' ', '').upper() == 'R-19'
+    assert 'batt' in found['Wall Insulation Type'].lower()
+    assert '4' in found['Wall Insulation Thickness']
+    assert 'foil' in found['Wall Insulation Facing'].lower()

@@ -4,7 +4,7 @@ const PART_SIZE=16*1024*1024;
 const REQUIRED_FIELDS=[
  ['Project','Bid Due'],['Project','Customer'],['Project','Project Name'],['Project','Project Address'],
  ['Geometry','Building Width'],['Geometry','Building Length'],['Geometry','Total Square Feet'],['Framing','Frame Type'],['Geometry','Ridge Offset'],['Geometry','BSW Eave Height'],['Geometry','FSW Eave Height'],
- ['Envelope','Roof Panel Type'],['Geometry','Front Roof Slope'],['Geometry','Back Roof Slope'],['Envelope','Roof Panel Gauge'],['Envelope','Wall Panel Type'],['Envelope','Wall Panel Gauge'],['Envelope','Roof Insulation'],['Envelope','Wall Insulation'],
+ ['Envelope','Roof Panel Type'],['Geometry','Front Roof Slope'],['Geometry','Back Roof Slope'],['Envelope','Roof Panel Gauge'],['Envelope','Wall Panel Type'],['Envelope','Wall Panel Gauge'],['Insulation','Roof Insulation Type'],['Insulation','Roof Insulation R-Value'],['Insulation','Roof Insulation Thickness'],['Insulation','Roof Insulation Facing'],['Insulation','Wall Insulation Type'],['Insulation','Wall Insulation R-Value'],['Insulation','Wall Insulation Thickness'],['Insulation','Wall Insulation Facing'],
  ['Codes & Loads','Risk Category'],['Codes & Loads','Building Code'],['Codes & Loads','Roof Live Load'],['Codes & Loads','Dead Load'],['Codes & Loads','Collateral Load'],['Codes & Loads','Ground Snow Load'],['Codes & Loads','Roof Snow Load'],['Codes & Loads','Basic Wind Speed'],['Codes & Loads','Wind Exposure'],
  ['Codes & Loads','Site Class'],['Codes & Loads','Seismic Design Category'],['Codes & Loads','S1'],['Codes & Loads','Ss']
 ];
