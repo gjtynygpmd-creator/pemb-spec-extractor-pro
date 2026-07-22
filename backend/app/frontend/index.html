@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PEMB Projects</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header><div><div class="eyebrow">PEMB ESTIMATOR • PROJECT INTELLIGENCE</div><h1>Project Dashboard</h1><p>Track uploads, processing, extracted fields, conflicts, and exports.</p></div><div class="version">v1.0 Foundation</div></header>
+<main>
+<section class="panel">
+<div class="toolbar"><div><h2>Active Projects</h2><p class="muted">Projects are now stored in Neon PostgreSQL.</p></div><button id="newProjectBtn">New Project</button></div>
+<div id="projectForm" class="project-form hidden">
+<label>Project Name<input id="name"></label><label>Customer<input id="customer"></label>
+<label>Address<input id="address"></label><label>Bid Due<input id="bidDue" type="datetime-local"></label>
+<div class="form-actions"><button id="saveProject">Create Project</button><button id="cancelProject" class="secondary">Cancel</button></div>
+</div>
+<div id="projectGrid" class="project-cards"></div>
+<div id="dashboardMessage" class="analysis-status"></div>
+</section>
+</main>
+<script src="dashboard.js"></script>
+</body></html>

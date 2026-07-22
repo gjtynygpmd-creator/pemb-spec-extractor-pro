@@ -1,0 +1,270 @@
+{
+  "project": "Bradford EVSD Athletic Facility",
+  "version": "0.1",
+  "fields": [
+    {
+      "category": "Project",
+      "field": "Project Name",
+      "value": "Bradford EVSD Athletic Facility",
+      "confidence": 99,
+      "source": "Project specs, p. 1",
+      "status": "verified"
+    },
+    {
+      "category": "Project",
+      "field": "Project Address",
+      "value": "760 Railroad Avenue, Bradford, OH 45308",
+      "confidence": 99,
+      "source": "Project specs, p. 1",
+      "status": "verified"
+    },
+    {
+      "category": "Project",
+      "field": "Bid Due",
+      "value": "08/05/2026 2:00 PM",
+      "confidence": 99,
+      "source": "Project listing, p. 1",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Building Code",
+      "value": "Ohio Building Code (2024)",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Occupancy",
+      "value": "Assembly (Group A)",
+      "confidence": 98,
+      "source": "Section 13 34 19, p. 8",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Risk Category",
+      "value": "III",
+      "confidence": 99,
+      "source": "Structural S000 / Section 13 34 19",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Roof Live Load",
+      "value": "22 PSF",
+      "confidence": 88,
+      "source": "Section 13 34 19, p. 9",
+      "status": "conflict"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Roof Live Load (Structural)",
+      "value": "20 PSF",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "conflict"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Collateral Load",
+      "value": "5 PSF",
+      "confidence": 98,
+      "source": "Section 13 34 19, p. 9",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Ground Snow Load",
+      "value": "20 PSF",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Roof Snow Load",
+      "value": "20 PSF",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Basic Wind Speed",
+      "value": "114 MPH",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Wind Exposure",
+      "value": "C",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Site Class",
+      "value": "D",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Seismic Design Category",
+      "value": "B",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "Ss",
+      "value": "0.218",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Codes & Loads",
+      "field": "S1",
+      "value": "0.075",
+      "confidence": 99,
+      "source": "Structural S000",
+      "status": "verified"
+    },
+    {
+      "category": "Geometry",
+      "field": "Overall Width",
+      "value": "97'-8\" (irregular footprint)",
+      "confidence": 82,
+      "source": "Foundation plan S100",
+      "status": "review"
+    },
+    {
+      "category": "Geometry",
+      "field": "Overall Length",
+      "value": "166'-10\" (irregular footprint)",
+      "confidence": 82,
+      "source": "Foundation plan S100",
+      "status": "review"
+    },
+    {
+      "category": "Framing",
+      "field": "Frame Type",
+      "value": "Clear-span gable symmetrical rigid frames with lean-to framing",
+      "confidence": 86,
+      "source": "Section 13 34 19, p. 12",
+      "status": "review"
+    },
+    {
+      "category": "Roof",
+      "field": "Roof Panel",
+      "value": "22 ga Loc Seam 90/360 mechanically seamed standing seam",
+      "confidence": 99,
+      "source": "Section 13 34 19, p. 14",
+      "status": "verified"
+    },
+    {
+      "category": "Roof",
+      "field": "Roof Color",
+      "value": "Midnight Black",
+      "confidence": 99,
+      "source": "Exterior material schedule / Section 13 34 19",
+      "status": "verified"
+    },
+    {
+      "category": "Roof",
+      "field": "Roof Insulation",
+      "value": "R-25 + R-8 fabric liner system",
+      "confidence": 99,
+      "source": "Section 07 21 13",
+      "status": "verified"
+    },
+    {
+      "category": "Walls",
+      "field": "Wall Panel",
+      "value": "Vertical board-and-batten, concealed fastener",
+      "confidence": 99,
+      "source": "Section 07 42 13",
+      "status": "verified"
+    },
+    {
+      "category": "Walls",
+      "field": "Wall Panel Gauge",
+      "value": "24 ga aluminum (0.032 in min.)",
+      "confidence": 99,
+      "source": "Section 07 42 13",
+      "status": "verified"
+    },
+    {
+      "category": "Walls",
+      "field": "Wall Colors",
+      "value": "Midnight Black / Storm Gray",
+      "confidence": 97,
+      "source": "Exterior material schedule",
+      "status": "verified"
+    },
+    {
+      "category": "Walls",
+      "field": "Wall Insulation",
+      "value": "R-30 fabric liner system",
+      "confidence": 99,
+      "source": "Section 07 21 13",
+      "status": "verified"
+    },
+    {
+      "category": "Accessories",
+      "field": "Gutters",
+      "value": "8 x 8 with brackets",
+      "confidence": 98,
+      "source": "Architectural keynotes",
+      "status": "verified"
+    },
+    {
+      "category": "Accessories",
+      "field": "Downspouts",
+      "value": "5 x 5",
+      "confidence": 98,
+      "source": "Architectural keynotes",
+      "status": "verified"
+    },
+    {
+      "category": "Accessories",
+      "field": "Snow Retention",
+      "value": "Snow rail system",
+      "confidence": 98,
+      "source": "Architectural keynotes",
+      "status": "verified"
+    },
+    {
+      "category": "Special Framing",
+      "field": "Mezzanine",
+      "value": "Bar joists and steel deck; delegated design by PEMB manufacturer",
+      "confidence": 98,
+      "source": "Section 13 34 19, p. 8",
+      "status": "verified"
+    },
+    {
+      "category": "Special Framing",
+      "field": "Basketball Backstop Support",
+      "value": "Supplemental framing by PEMB manufacturer",
+      "confidence": 98,
+      "source": "Section 13 34 19, p. 8",
+      "status": "verified"
+    },
+    {
+      "category": "Special Framing",
+      "field": "Batting Cage Support",
+      "value": "Steel beam and connections at mezzanine level",
+      "confidence": 98,
+      "source": "Section 13 34 19, p. 8",
+      "status": "verified"
+    }
+  ]
+}

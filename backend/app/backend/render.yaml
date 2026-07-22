@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: pemb-spec-extractor-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        value: pemb-project-files
+      - key: S3_REGION
+        value: auto
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: worker
+    name: pemb-spec-extractor-worker
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m app.worker
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        value: pemb-project-files
+      - key: S3_REGION
+        value: auto
+      - key: WORKER_POLL_SECONDS
+        value: 8
