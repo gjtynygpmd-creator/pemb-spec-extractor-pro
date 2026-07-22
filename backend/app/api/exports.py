@@ -117,7 +117,7 @@ def export_xlsx(project_id: str, db: Session = Depends(get_db)):
     wb = Workbook()
     summary = wb.active
     summary.title = "Project Summary"
-    summary.append(["PEMB Spec Extractor Pro", "v1.5.0 Core Extraction"])
+    summary.append(["PEMB Spec Extractor Pro", "v1.5.1 Core Extraction"])
     summary.append(["Project Name", project.name])
     summary.append(["Customer", project.customer or ""])
     summary.append(["Address", project.address or ""])
@@ -237,7 +237,7 @@ def _build_pdf(project, fields) -> bytes:
     small = ParagraphStyle("Small", parent=body, fontSize=7.5, leading=9, textColor=muted)
     white_body = ParagraphStyle("WhiteBody", parent=body, textColor=colors.white, fontName="Helvetica-Bold")
     story = [
-        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.4.1 PDF EXPORT", eyebrow),
+        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.5.1 UNIVERSAL FIELD FINDER", eyebrow),
         Paragraph(_pdf_text(project.name), title_style),
         Paragraph("Estimator summary generated from reviewed, extracted, and manually entered project data.", small),
         Spacer(1, 10),

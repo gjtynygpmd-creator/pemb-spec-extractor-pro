@@ -166,6 +166,60 @@ FIELD_RULES: tuple[FieldRule, ...] = (
 )
 
 
+# v1.5.1 universal label/value fallback. This complements the targeted rules above
+# and is intentionally limited to high-value estimating labels. It is used on every
+# searchable page, including pages that cannot be classified reliably.
+GENERIC_LABEL_RULES: tuple[FieldRule, ...] = (
+    FieldRule("Geometry", "Building Width", (r"\b(?:bldg\.?|building)\s+(?:overall\s+)?width\s*[:=\-]?\s*([^\n|]{2,40})",), 0.78),
+    FieldRule("Geometry", "Building Length", (r"\b(?:bldg\.?|building)\s+(?:overall\s+)?length\s*[:=\-]?\s*([^\n|]{2,40})",), 0.78),
+    FieldRule("Geometry", "Eave Height", (r"\beave\s+(?:ht\.?|height|elev\.?|elevation)\s*[:=\-]?\s*([^\n|]{2,40})",), 0.80),
+    FieldRule("Geometry", "Roof Slope", (r"\broof\s+(?:slope|pitch)\s*[:=\-]?\s*([^\n|]{2,30})",), 0.82),
+    FieldRule("Codes & Loads", "Building Code", (r"\b(?:applicable|governing|design)\s+(?:building\s+)?code\s*[:=\-]?\s*([^\n|]{4,90})",), 0.83),
+    FieldRule("Codes & Loads", "Risk Category", (r"\brisk\s+category\s*[:=\-]?\s*([^\n|]{1,18})",), 0.88),
+    FieldRule("Codes & Loads", "Basic Wind Speed", (r"\b(?:ultimate\s+design\s+wind\s+speed|basic\s+wind\s+speed|wind\s+speed|vult)\s*[:=\-]?\s*([^\n|]{2,35})",), 0.86),
+    FieldRule("Codes & Loads", "Wind Exposure", (r"\b(?:wind\s+)?exposure(?:\s+category)?\s*[:=\-]?\s*([^\n|]{1,20})",), 0.85),
+    FieldRule("Codes & Loads", "Ground Snow Load", (r"\b(?:ground\s+snow\s+load|pg)\s*[:=\-]?\s*([^\n|]{1,30})",), 0.87),
+    FieldRule("Codes & Loads", "Roof Snow Load", (r"\b(?:flat\s+roof\s+snow\s+load|roof\s+snow\s+load|pf)\s*[:=\-]?\s*([^\n|]{1,30})",), 0.87),
+    FieldRule("Codes & Loads", "Roof Live Load", (r"\broof\s+live\s+load\s*[:=\-]?\s*([^\n|]{1,30})",), 0.87),
+    FieldRule("Codes & Loads", "Collateral Load", (r"\bcollateral(?:\s+dead)?\s+load\s*[:=\-]?\s*([^\n|]{1,30})",), 0.86),
+    FieldRule("Codes & Loads", "Seismic Design Category", (r"\bseismic\s+design\s+category\s*[:=\-]?\s*([^\n|]{1,20})",), 0.89),
+    FieldRule("Codes & Loads", "Site Class", (r"\bsite\s+class\s*[:=\-]?\s*([^\n|]{1,20})",), 0.87),
+)
+
+
+def _clean_generic_value(field_name: str, value: str) -> str | None:
+    value = normalize_space(value)
+    # Stop common table spillover and retain only the useful leading value.
+    value = re.split(r"\s{3,}|\b(?:NOTES?|REMARKS?|REFERENCE)\b", value, maxsplit=1, flags=re.I)[0].strip()
+    if not value or len(value) > 120:
+        return None
+    validators = {
+        "Building Width": r"^(?:\d+(?:\.\d+)?\s*(?:ft|feet|['’])|\d+\s*[-']\s*\d+(?:\s+\d+/\d+)?\s*[\"”]?)\b",
+        "Building Length": r"^(?:\d+(?:\.\d+)?\s*(?:ft|feet|['’])|\d+\s*[-']\s*\d+(?:\s+\d+/\d+)?\s*[\"”]?)\b",
+        "Eave Height": r"^(?:\d+(?:\.\d+)?\s*(?:ft|feet|['’])|\d+\s*[-']\s*\d+(?:\s+\d+/\d+)?\s*[\"”]?)\b",
+        "Building Code": r"^(?=.*(?:IBC|BUILDING CODE|INTERNATIONAL BUILDING CODE|OHIO BUILDING CODE|FLORIDA BUILDING CODE|CALIFORNIA BUILDING CODE)).{4,90}$",
+        "Risk Category": r"^(?:I{1,3}|IV|[1-4])\b",
+        "Wind Exposure": r"^[BCD]\b",
+        "Seismic Design Category": r"^[A-F]\b",
+        "Site Class": r"^[A-F]\b",
+        "Basic Wind Speed": r"^\d{2,3}(?:\s*mph)?\b",
+        "Ground Snow Load": r"^\d+(?:\.\d+)?(?:\s*psf)?\b",
+        "Roof Snow Load": r"^\d+(?:\.\d+)?(?:\s*psf)?\b",
+        "Roof Live Load": r"^\d+(?:\.\d+)?(?:\s*psf)?\b",
+        "Collateral Load": r"^\d+(?:\.\d+)?(?:\s*psf)?\b",
+        "Roof Slope": r"^(?:\d+(?:\.\d+)?\s*(?::|/)\s*12|\d+(?:\.\d+)?\s*in(?:ch)?(?:es)?\s+per\s+foot)\b",
+    }
+    pattern = validators.get(field_name)
+    if pattern:
+        m = re.search(pattern, value, re.I)
+        if not m:
+            return None
+        value = m.group(0)
+    if re.search(r"^(?:n/?a|none|not applicable|see drawings?|see plans?)$", value, re.I):
+        return None
+    return value
+
+
 def normalize_space(value: str) -> str:
     value = value.replace("\u2013", "-").replace("\u2014", "-")
     return re.sub(r"\s+", " ", value).strip(" :;,-")
@@ -259,4 +313,29 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
                 break
             if matched:
                 break
+
+    # Universal field finder: examine label/value pairs regardless of page type.
+    # Targeted matches remain preferred because their base confidence is higher.
+    compact = re.sub(r"[\t\r]+", " ", text)
+    for rule in GENERIC_LABEL_RULES:
+        for pattern in rule.patterns:
+            for match in re.finditer(pattern, compact, flags=re.IGNORECASE | re.MULTILINE):
+                value = _clean_generic_value(rule.field_name, match.group(1))
+                if not value:
+                    continue
+                key = (rule.field_name, normalized_compare(value))
+                if key in seen:
+                    continue
+                seen.add(key)
+                excerpt_start = max(0, match.start() - 120)
+                excerpt_end = min(len(compact), match.end() + 180)
+                excerpt = normalize_space(compact[excerpt_start:excerpt_end])
+                found.append({
+                    "category": rule.category,
+                    "field_name": rule.field_name,
+                    "value": value,
+                    "confidence": _rule_confidence(rule, page_type, division, excerpt),
+                    "source_excerpt": excerpt,
+                    "match_method": "universal_label",
+                })
     return found

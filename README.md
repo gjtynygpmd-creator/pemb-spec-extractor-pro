@@ -1,15 +1,16 @@
-# PEMB Spec Extractor Pro v1.5.0
+# PEMB Spec Extractor Pro v1.5.1
 
-## PDF Export Release
+## Universal Field Finder Release
 
-This release retains the v1.4.0 Excel, full CSV, and Zoho CSV exports and adds a formatted estimator-summary PDF export.
+v1.5.1 retains Excel, full CSV, Zoho CSV, and PDF exports and improves the searchable-text extraction pipeline.
 
-### Export formats
-- Excel estimator workbook
-- Complete extracted-data CSV
-- Zoho-ready CSV
-- Estimator Summary PDF
+### Improvements
+- Searches every searchable PDF page, including `unclassified` pages.
+- Adds a validated label/value fallback for design-criteria tables.
+- Improves capture of building code, risk category, wind, snow, roof live load, collateral load, seismic design category, and site class.
+- Rejects common definition text that can look like a building dimension.
+- Retains targeted PEMB extraction for panels, insulation, framing, openings, finishes, gutters, downspouts, canopies, curbs, and vents.
+- Preserves manually entered estimator values when analysis is rerun.
+- Adds a worker version startup message so the deployed processing code can be verified independently of the API.
 
-The PDF includes project information, captured fields, review status, source references, conflicts, and a missing-core-information checklist. Manually entered fields are included.
-
-No database migration is required. See `deployment/IMPLEMENT_V1.5.0.md`.
+No database migration is required. See `deployment/IMPLEMENT_V1.5.1.md`.
