@@ -117,7 +117,7 @@ def export_xlsx(project_id: str, db: Session = Depends(get_db)):
     wb = Workbook()
     summary = wb.active
     summary.title = "Project Summary"
-    summary.append(["PEMB Spec Extractor Pro", "v1.4.1 PDF Export"])
+    summary.append(["PEMB Spec Extractor Pro", "v1.5.0 Core Extraction"])
     summary.append(["Project Name", project.name])
     summary.append(["Customer", project.customer or ""])
     summary.append(["Address", project.address or ""])

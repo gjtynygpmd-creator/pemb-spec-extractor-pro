@@ -17,7 +17,7 @@ from app.models.project import (
     Project,
     UploadedFile,
 )
-from app.services.document_analysis import classify_page, extract_fields
+from app.services.document_analysis import classify_page, extract_fields, normalized_compare
 from app.services.storage import get_s3
 from app.core.config import settings
 
@@ -66,7 +66,20 @@ def process_job(job_id: str):
         files = db.scalars(select(UploadedFile).where(UploadedFile.project_id == job.project_id)).all()
         try:
             db.execute(delete(DocumentPage).where(DocumentPage.project_id == job.project_id))
-            db.execute(delete(ExtractedField).where(ExtractedField.project_id == job.project_id))
+            # Preserve estimator-entered values when a project is re-analyzed.
+            manual_fields = db.scalars(
+                select(ExtractedField).where(
+                    ExtractedField.project_id == job.project_id,
+                    ExtractedField.source_file == "Manual entry",
+                )
+            ).all()
+            manual_names = {field.field_name for field in manual_fields}
+            db.execute(
+                delete(ExtractedField).where(
+                    ExtractedField.project_id == job.project_id,
+                    ExtractedField.source_file != "Manual entry",
+                )
+            )
             db.commit()
             event(db, job, "downloading", 5, f"Preparing {len(files)} uploaded file(s)")
 
@@ -116,7 +129,7 @@ def process_job(job_id: str):
                         ))
 
                         if is_searchable:
-                            for candidate in extract_fields(text):
+                            for candidate in extract_fields(text, page_type=page_type, division=division):
                                 candidate.update({
                                     "source_file": source.filename,
                                     "source_page": index + 1,
@@ -137,9 +150,11 @@ def process_job(job_id: str):
 
             event(db, job, "extracting_fields", 84, "Consolidating source-backed PEMB fields")
             for field_name, candidates in all_candidates.items():
-                unique_values = {c["value"].lower().replace(" ", "") for c in candidates}
+                if field_name in manual_names:
+                    continue
+                unique_values = {normalized_compare(c["value"]) for c in candidates}
                 status = "conflict" if len(unique_values) > 1 else "review"
-                best = sorted(candidates, key=lambda c: c["confidence"], reverse=True)[0]
+                best = sorted(candidates, key=lambda c: (c["confidence"], len(c.get("source_excerpt") or "")), reverse=True)[0]
                 db.add(ExtractedField(
                     project_id=job.project_id,
                     category=best["category"],
@@ -156,8 +171,8 @@ def process_job(job_id: str):
             db.commit()
 
             event(db, job, "checking_conflicts", 94, "Checking duplicate values and conflicts")
-            field_count = len(all_candidates)
-            conflict_count = sum(1 for items in all_candidates.values() if len({x['value'].lower().replace(' ', '') for x in items}) > 1)
+            field_count = len([name for name in all_candidates if name not in manual_names]) + len(manual_names)
+            conflict_count = sum(1 for name, items in all_candidates.items() if name not in manual_names and len({normalized_compare(x['value']) for x in items}) > 1)
             job.status = "completed"
             job.stage = "completed"
             job.progress = 100

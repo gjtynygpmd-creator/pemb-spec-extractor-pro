@@ -1,4 +1,4 @@
-# PEMB Spec Extractor Pro v1.4.1
+# PEMB Spec Extractor Pro v1.5.0
 
 ## PDF Export Release
 
@@ -12,4 +12,4 @@ This release retains the v1.4.0 Excel, full CSV, and Zoho CSV exports and adds a
 
 The PDF includes project information, captured fields, review status, source references, conflicts, and a missing-core-information checklist. Manually entered fields are included.
 
-No database migration is required. See `deployment/IMPLEMENT_V1.4.1.md`.
+No database migration is required. See `deployment/IMPLEMENT_V1.5.0.md`.
