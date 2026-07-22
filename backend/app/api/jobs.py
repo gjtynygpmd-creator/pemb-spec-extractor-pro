@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,6 +7,7 @@ from app.schemas.upload import JobCreate
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
+
 def serialize(j: ProcessingJob):
     return {
         "id": j.id,
@@ -16,9 +16,14 @@ def serialize(j: ProcessingJob):
         "progress": j.progress,
         "stage": j.stage,
         "message": j.message,
+        "error_message": j.error_message,
+        "attempts": j.attempts,
+        "started_at": j.started_at,
+        "completed_at": j.completed_at,
         "created_at": j.created_at,
         "updated_at": j.updated_at,
     }
+
 
 @router.post("")
 def create_job(payload: JobCreate, db: Session = Depends(get_db)):
@@ -26,11 +31,18 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(404, "Project not found")
 
-    file_count = db.query(UploadedFile).filter(
-        UploadedFile.project_id == project.id
-    ).count()
+    file_count = db.query(UploadedFile).filter(UploadedFile.project_id == project.id).count()
     if file_count == 0:
         raise HTTPException(400, "Upload at least one file before starting analysis")
+
+    active = db.scalars(
+        select(ProcessingJob).where(
+            ProcessingJob.project_id == project.id,
+            ProcessingJob.status.in_(["queued", "processing"]),
+        ).order_by(ProcessingJob.created_at.desc())
+    ).first()
+    if active:
+        return serialize(active)
 
     job = ProcessingJob(
         project_id=project.id,
@@ -45,12 +57,14 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     db.refresh(job)
     return serialize(job)
 
+
 @router.get("/{job_id}")
 def get_job(job_id: str, db: Session = Depends(get_db)):
     job = db.get(ProcessingJob, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     return serialize(job)
+
 
 @router.get("")
 def list_jobs(project_id: str | None = None, db: Session = Depends(get_db)):

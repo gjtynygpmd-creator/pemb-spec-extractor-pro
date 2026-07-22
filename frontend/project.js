@@ -2,7 +2,7 @@
 const API_BASE=(window.PEMB_API_BASE||localStorage.getItem('pembApiBase')||'https://pemb-spec-extractor-pro.onrender.com').replace(/\/$/,'');
 const PROJECT_ID=new URLSearchParams(location.search).get('id');
 const PART_SIZE=16*1024*1024;
-let selected=[],workspace=null;
+let selected=[],workspace=null,pollTimer=null;
 const $=id=>document.getElementById(id);
 const formatBytes=n=>{const u=['B','KB','MB','GB','TB'];let i=0,x=n||0;while(x>=1024&&i<u.length-1){x/=1024;i++}return `${x.toFixed(i<2?1:2)} ${u[i]}`};
 const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -16,8 +16,8 @@ async function loadWorkspace(){
   workspace=await api(`/projects/${PROJECT_ID}/workspace`);
   const p=workspace.project;
   $('projectTitle').textContent=p.name;$('projectSubtitle').textContent=[p.customer,p.address].filter(Boolean).join(' • ')||'PEMB estimating project';
-  $('fileCount').textContent=p.file_count;$('fieldCount').textContent=p.field_count;$('conflictCount').textContent=p.conflict_count;$('projectState').textContent=p.status;
-  renderStored();renderJobs();renderFields()
+  $('fileCount').textContent=p.file_count;$('fieldCount').textContent=p.field_count;$('conflictCount').textContent=p.conflict_count;$('projectState').textContent=p.status;$('pageCount').textContent=p.page_count||0;$('ocrCount').textContent=p.ocr_count||0;
+  renderStored();renderJobs();renderFields();renderInspection();renderActivity();schedulePolling()
  }catch(e){$('uploadMessage').textContent='Unable to load project: '+e.message;$('uploadMessage').className='analysis-status error'}
 }
 function addFiles(files){
@@ -60,8 +60,11 @@ function renderStored(){
  $('storedFiles').innerHTML=workspace.files.length?workspace.files.map(f=>`<div class="stored-file"><div><strong>${escapeHtml(f.filename)}</strong><div class="file-meta">${formatBytes(f.size_bytes)} • ${escapeHtml(f.content_type||'unknown type')}</div></div><span class="badge">${escapeHtml(f.status)}</span></div>`).join(''):'<div class="muted">No files uploaded yet.</div>'
 }
 function renderJobs(){
- $('jobs').className='jobs';$('jobs').innerHTML=workspace.jobs.length?workspace.jobs.map(j=>`<div class="job-card"><div><div class="job-title">${escapeHtml(j.stage||j.status)}</div><div class="job-details">${escapeHtml(j.message||'')} • ${new Date(j.created_at).toLocaleString()}</div></div><div class="badge">${escapeHtml(j.status)} ${j.progress}%</div></div>`).join(''):'<div class="muted">No processing jobs yet.</div>'
+ $('jobs').className='jobs';$('jobs').innerHTML=workspace.jobs.length?workspace.jobs.map(j=>`<div class="job-card"><div class="job-main"><div class="job-title">${escapeHtml(j.stage||j.status)}</div><div class="job-details">${escapeHtml(j.message||'')} • ${new Date(j.created_at).toLocaleString()}</div><div class="progress job-progress"><div style="width:${Math.max(0,Math.min(100,j.progress||0))}%"></div></div></div><div class="badge">${escapeHtml(j.status)} ${j.progress}%</div></div>`).join(''):'<div class="muted">No processing jobs yet.</div>'
 }
+function renderInspection(){const i=workspace.inspection||{};const parts=[];(i.page_types||[]).forEach(x=>parts.push(`<span class="summary-chip">${escapeHtml(x.type)}: <strong>${x.count}</strong></span>`));(i.divisions||[]).forEach(x=>parts.push(`<span class="summary-chip">Division ${escapeHtml(x.division)}: <strong>${x.count}</strong></span>`));$('inspectionSummary').innerHTML=parts.length?parts.join(''):'<span class="muted">Run analysis to index pages.</span>'}
+function renderActivity(){const events=workspace.events||[];$('activityFeed').innerHTML=events.length?events.map(e=>`<div class="activity-item"><strong>${escapeHtml(e.stage)}</strong><span>${escapeHtml(e.message||'')}</span><small>${e.progress}% • ${new Date(e.created_at).toLocaleString()}</small></div>`).join(''):'<span class="muted">No activity yet.</span>'}
+function schedulePolling(){clearTimeout(pollTimer);const active=(workspace.jobs||[]).some(j=>['queued','processing'].includes(j.status));if(active)pollTimer=setTimeout(loadWorkspace,4000)}
 function renderFields(){
  $('fieldsBody').innerHTML=workspace.fields.length?workspace.fields.map(f=>`<tr><td>${escapeHtml(f.category)}</td><td><strong>${escapeHtml(f.field_name)}</strong></td><td>${escapeHtml(f.value||'')}</td><td>${f.confidence??''}</td><td>${escapeHtml([f.source_file,f.source_sheet,f.source_page?`p. ${f.source_page}`:''].filter(Boolean).join(' • '))}</td><td>${escapeHtml(f.status)}</td></tr>`).join(''):'<tr><td colspan="6" class="muted">No extracted fields yet.</td></tr>'
 }

@@ -1,13 +1,11 @@
-# Processing Workers
+# Processing Worker
 
-This folder will contain the long-running document-processing services:
+The active worker now lives at `backend/app/worker.py` so the API and worker share the same models, configuration, and dependencies.
 
-- PDF inspection and page rendering
-- ZIP package expansion and validation
-- OCR for image-only pages
-- Drawing and sheet classification
-- PEMB field extraction
-- Conflict detection and normalization
-- Excel and Zoho export generation
+Run locally from `backend/`:
 
-The workers will consume queued jobs created by the FastAPI backend.
+```bash
+python -m app.worker
+```
+
+Deploy on Render as a Background Worker using the same environment variables as the API.

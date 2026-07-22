@@ -1,25 +1,31 @@
 # PEMB Spec Extractor Pro
 
-A Western Steel estimating application for uploading large bid packages, extracting PEMB project data, reviewing source-backed results, and exporting completed estimating records.
+A proprietary estimating application for uploading large bid packages, indexing relevant construction documents, extracting source-backed PEMB project data, reviewing conflicts, and preparing downstream exports.
 
 ## Repository Structure
 
 - `frontend/` — Netlify web interface
-- `backend/` — FastAPI application and upload-control API
-- `workers/` — OCR, drawing vision, and extraction workers
-- `database/` — PostgreSQL migrations and schema documentation
-- `docs/` — Architecture and roadmap
-- `deployment/` — Netlify, Render, R2, and Neon deployment notes
-- `tests/` — Automated and benchmark tests
+- `backend/` — FastAPI API and the background processing worker
+- `database/` — PostgreSQL migrations
+- `docs/` — architecture, roadmap, and deployment instructions
+- `tests/` — benchmark and automated tests
+
+## Current Release
+
+**v1.2 Processing Engine MVP**
+
+- Persistent projects and large multipart uploads
+- Background worker that claims queued jobs
+- PDF download and searchable-text inspection
+- Page classification and Division 05/07/08/13 detection
+- Initial source-backed PEMB field extraction
+- Conflict flagging and project activity timeline
 
 ## Infrastructure
 
 - Netlify: frontend
-- Render: FastAPI backend and workers
-- Cloudflare R2: source documents and generated files
+- Render: FastAPI backend and background worker
+- Cloudflare R2: source documents
 - Neon: PostgreSQL database
-- OpenAI API: document and drawing interpretation
 
-## Security
-
-Do not commit passwords, database connection strings, API keys, or R2 credentials. Add them only as environment variables in Render and Netlify.
+Do not commit passwords, connection strings, API keys, or R2 credentials. Store them only as environment variables.

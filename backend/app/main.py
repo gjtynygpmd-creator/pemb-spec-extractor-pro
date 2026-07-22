@@ -6,9 +6,9 @@ from app.db.session import Base, engine
 from app.api.projects import router as projects_router
 from app.api.uploads import router as uploads_router
 from app.api.jobs import router as jobs_router
-from app.models.project import Project, UploadedFile, ProcessingJob, ExtractedField
+from app.models.project import Project, UploadedFile, ProcessingJob, ExtractedField, DocumentPage, ProcessingEvent
 
-app = FastAPI(title="PEMB Spec Extractor Pro API", version="1.0.0")
+app = FastAPI(title="PEMB Spec Extractor Pro API", version="1.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
@@ -27,7 +27,7 @@ def health():
         "status": "ok",
         "storage_configured": bool(settings.s3_endpoint_url),
         "database_configured": bool(settings.database_url),
-        "version": "1.1.0"
+        "version": "1.2.0"
     }
 
 app.include_router(projects_router)

@@ -5,13 +5,15 @@
 <title>PEMB Project Workspace</title><link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header><div><div class="eyebrow">WESTERN STEEL • ESTIMATING TOOLS</div><h1 id="projectTitle">Project Workspace</h1><p id="projectSubtitle">Loading project…</p></div><div><a class="button secondary" href="index.html">All Projects</a></div></header>
+<header><div><div class="eyebrow">PEMB ESTIMATOR • PROJECT INTELLIGENCE</div><h1 id="projectTitle">Project Workspace</h1><p id="projectSubtitle">Loading project…</p></div><div><a class="button secondary" href="index.html">All Projects</a></div></header>
 <main>
 <section class="metrics">
 <div class="metric"><span id="fileCount">0</span><small>Uploaded Files</small></div>
 <div class="metric"><span id="fieldCount">0</span><small>Extracted Fields</small></div>
 <div class="metric"><span id="conflictCount">0</span><small>Conflicts</small></div>
 <div class="metric"><span id="projectState">Draft</span><small>Project Status</small></div>
+<div class="metric"><span id="pageCount">0</span><small>Indexed Pages</small></div>
+<div class="metric"><span id="ocrCount">0</span><small>Need OCR</small></div>
 </section>
 
 <section class="panel">
@@ -30,11 +32,12 @@
 <div class="toolbar"><div><h2>3. Processing</h2><p class="muted">Start the first inspection job after all source files are uploaded.</p></div><button id="analyzeBtn">Start Analysis</button></div>
 <div id="jobs" class="jobs empty">No processing jobs yet.</div>
 <div id="jobMessage" class="analysis-status"></div>
+<div class="analysis-grid"><div><h3>Inspection Summary</h3><div id="inspectionSummary" class="summary-list muted">Run analysis to index pages.</div></div><div><h3>Activity</h3><div id="activityFeed" class="activity-feed muted">No activity yet.</div></div></div>
 </section>
 
 <section class="panel">
 <h2>4. Extracted PEMB Data</h2>
-<p class="muted">This table will populate when the OCR/extraction worker is added in the next milestone.</p>
+<p class="muted">Source-backed results from searchable PDF text. Image-only pages are flagged for the OCR milestone.</p>
 <div class="table-wrap"><table><thead><tr><th>Category</th><th>Field</th><th>Value</th><th>Confidence</th><th>Source</th><th>Status</th></tr></thead><tbody id="fieldsBody"></tbody></table></div>
 </section>
 </main>
