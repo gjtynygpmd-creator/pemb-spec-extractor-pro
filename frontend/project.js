@@ -39,10 +39,10 @@ async function startAnalysis(){try{await api('/jobs',{method:'POST',body:JSON.st
 
 function downloadExport(format){
  if(!PROJECT_ID)return;
- const allowed={xlsx:'xlsx',csv:'csv',zoho:'zoho-csv'};
+ const allowed={xlsx:'xlsx',csv:'csv',zoho:'zoho-csv',pdf:'pdf'};
  const path=allowed[format];
  if(!path)return;
  window.location.href=`${API_BASE}/exports/projects/${PROJECT_ID}/${path}`;
 }
 function show(id,text,type=''){const e=$(id);e.textContent=text;e.className=`analysis-status ${type}`}
-const dz=$('dropzone'),fi=$('fileInput');fi.onchange=e=>addFiles(e.target.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>addFiles(e.dataTransfer.files));$('clearFiles').onclick=()=>{selected=[];renderPending()};$('uploadBtn').onclick=uploadSelected;$('refreshBtn').onclick=loadWorkspace;$('analyzeBtn').onclick=startAnalysis;$('categoryFilter').onchange=renderReview;$('statusFilter').onchange=renderReview;$('closeDrawer').onclick=closeDrawer;$('drawerBackdrop').onclick=closeDrawer;$('saveField').onclick=saveField;$('exportXlsx').onclick=()=>downloadExport('xlsx');$('exportCsv').onclick=()=>downloadExport('csv');$('exportZoho').onclick=()=>downloadExport('zoho');loadWorkspace();
+const dz=$('dropzone'),fi=$('fileInput');fi.onchange=e=>addFiles(e.target.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>addFiles(e.dataTransfer.files));$('clearFiles').onclick=()=>{selected=[];renderPending()};$('uploadBtn').onclick=uploadSelected;$('refreshBtn').onclick=loadWorkspace;$('analyzeBtn').onclick=startAnalysis;$('categoryFilter').onchange=renderReview;$('statusFilter').onchange=renderReview;$('closeDrawer').onclick=closeDrawer;$('drawerBackdrop').onclick=closeDrawer;$('saveField').onclick=saveField;$('exportXlsx').onclick=()=>downloadExport('xlsx');$('exportCsv').onclick=()=>downloadExport('csv');$('exportZoho').onclick=()=>downloadExport('zoho');$('exportPdf').onclick=()=>downloadExport('pdf');loadWorkspace();

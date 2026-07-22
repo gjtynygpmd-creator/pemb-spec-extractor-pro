@@ -1,21 +1,15 @@
-# PEMB Spec Extractor Pro v1.4.0
+# PEMB Spec Extractor Pro v1.4.1
 
-Production export release for PEMB estimating projects.
+## PDF Export Release
 
-## Included
+This release retains the v1.4.0 Excel, full CSV, and Zoho CSV exports and adds a formatted estimator-summary PDF export.
 
-- Persistent projects, uploads, processing jobs, indexed pages, and estimator review
-- Editable/manual extracted fields with review status and source references
-- Excel estimator workbook export
-- Complete extracted-data CSV export
-- Zoho-ready single-row CSV export
-- No database migration required from v1.3
+### Export formats
+- Excel estimator workbook
+- Complete extracted-data CSV
+- Zoho-ready CSV
+- Estimator Summary PDF
 
-## Deployment
+The PDF includes project information, captured fields, review status, source references, conflicts, and a missing-core-information checklist. Manually entered fields are included.
 
-- Netlify base directory: `frontend`
-- Render root directory: `backend`
-- Render web command is supplied by the Dockerfile
-- Render worker command: `python -m app.worker`
-
-See `deployment/IMPLEMENT_V1.4.0.md` for update and verification steps.
+No database migration is required. See `deployment/IMPLEMENT_V1.4.1.md`.
