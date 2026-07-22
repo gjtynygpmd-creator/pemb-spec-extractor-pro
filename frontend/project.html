@@ -2,44 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PEMB Project Workspace</title><link rel="stylesheet" href="styles.css">
+<title>PEMB Estimator Review</title><link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header><div><div class="eyebrow">PEMB ESTIMATOR • PROJECT INTELLIGENCE</div><h1 id="projectTitle">Project Workspace</h1><p id="projectSubtitle">Loading project…</p></div><div><a class="button secondary" href="index.html">All Projects</a></div></header>
+<header><div><div class="eyebrow">PEMB ESTIMATOR • v1.4.0 PRODUCTION EXPORT</div><h1 id="projectTitle">Project Workspace</h1><p id="projectSubtitle">Loading project…</p></div><div><a class="button secondary" href="index.html">All Projects</a></div></header>
 <main>
 <section class="metrics">
 <div class="metric"><span id="fileCount">0</span><small>Uploaded Files</small></div>
 <div class="metric"><span id="fieldCount">0</span><small>Extracted Fields</small></div>
 <div class="metric"><span id="conflictCount">0</span><small>Conflicts</small></div>
+<div class="metric"><span id="missingCount">0</span><small>Missing Items</small></div>
 <div class="metric"><span id="projectState">Draft</span><small>Project Status</small></div>
 <div class="metric"><span id="pageCount">0</span><small>Indexed Pages</small></div>
 <div class="metric"><span id="ocrCount">0</span><small>Need OCR</small></div>
+<div class="metric"><span id="reviewProgress">0%</span><small>Review Complete</small></div>
+</section>
+
+<section class="panel review-hero">
+<div><h2>Estimator Review</h2><p class="muted">Review extracted values, resolve conflicts, and fill missing bid information. Click any field to inspect its source and edit it.</p></div>
+<div class="review-actions"><button id="exportXlsx">Export Excel</button><button id="exportCsv" class="secondary">Export CSV</button><button id="exportZoho" class="secondary">Export Zoho CSV</button><select id="categoryFilter"><option value="">All categories</option></select><select id="statusFilter"><option value="">All statuses</option><option value="review">Needs review</option><option value="accepted">Accepted</option><option value="conflict">Conflict</option></select></div>
+</section>
+
+<section class="review-layout">
+<div class="panel">
+<div class="toolbar"><div><h2>Project Data</h2><p class="muted">Source-backed PEMB estimating fields.</p></div><button id="refreshBtn" class="secondary">Refresh</button></div>
+<div id="fieldCards" class="field-cards"></div>
+</div>
+<aside>
+<section class="panel sticky-panel"><h2>Bid Readiness</h2><div id="readinessBar" class="readiness-bar"><div></div></div><p id="readinessText" class="muted"></p><h3>Missing Information</h3><div id="missingList" class="checklist"></div><h3>Conflicts</h3><div id="conflictList" class="checklist"></div></section>
+</aside>
 </section>
 
 <section class="panel">
-<div class="toolbar"><div><h2>1. Upload Project Documents</h2><p class="muted">Files upload directly to Cloudflare R2 and are recorded in Neon.</p></div><button id="clearFiles" class="secondary">Clear Selection</button></div>
-<label class="dropzone" id="dropzone"><input id="fileInput" type="file" multiple accept=".pdf,.zip,.tif,.tiff,.png,.jpg,.jpeg,.docx,.xlsx,.dwg,.dxf"><strong>Drop large project files here</strong><span>Specifications, architectural drawings, structural drawings, schedules, ZIP packages, and scans.</span></label>
-<div class="upload-toolbar"><span class="muted">16 MB multipart upload with per-file progress</span><button id="uploadBtn">Upload Selected Files</button></div>
+<div class="toolbar"><div><h2>1. Upload Project Documents</h2><p class="muted">Specifications, drawings, addenda, insulation, and door information.</p></div><button id="clearFiles" class="secondary">Clear Selection</button></div>
+<label class="dropzone" id="dropzone"><input id="fileInput" type="file" multiple accept=".pdf,.zip,.tif,.tiff,.png,.jpg,.jpeg,.docx,.xlsx,.dwg,.dxf"><strong>Drop project files here</strong><span>Division 05 and 13 are primary; relevant insulation, doors, architectural, and structural documents are also supported.</span></label>
+<div class="upload-toolbar"><span class="muted">16 MB multipart upload</span><button id="uploadBtn">Upload Selected Files</button></div>
 <div id="pendingFiles" class="file-list"></div><div id="uploadMessage" class="analysis-status"></div>
 </section>
-
-<section class="panel">
-<div class="toolbar"><div><h2>2. Uploaded Files</h2><p class="muted">Persistent source files currently associated with this project.</p></div><button id="refreshBtn" class="secondary">Refresh</button></div>
-<div id="storedFiles" class="stored-list"></div>
-</section>
-
-<section class="panel">
-<div class="toolbar"><div><h2>3. Processing</h2><p class="muted">Start the first inspection job after all source files are uploaded.</p></div><button id="analyzeBtn">Start Analysis</button></div>
-<div id="jobs" class="jobs empty">No processing jobs yet.</div>
-<div id="jobMessage" class="analysis-status"></div>
-<div class="analysis-grid"><div><h3>Inspection Summary</h3><div id="inspectionSummary" class="summary-list muted">Run analysis to index pages.</div></div><div><h3>Activity</h3><div id="activityFeed" class="activity-feed muted">No activity yet.</div></div></div>
-</section>
-
-<section class="panel">
-<h2>4. Extracted PEMB Data</h2>
-<p class="muted">Source-backed results from searchable PDF text. Image-only pages are flagged for the OCR milestone.</p>
-<div class="table-wrap"><table><thead><tr><th>Category</th><th>Field</th><th>Value</th><th>Confidence</th><th>Source</th><th>Status</th></tr></thead><tbody id="fieldsBody"></tbody></table></div>
-</section>
+<section class="panel"><div class="toolbar"><div><h2>2. Uploaded Files</h2><p class="muted">Persistent source files associated with this project.</p></div></div><div id="storedFiles" class="stored-list"></div></section>
+<section class="panel"><div class="toolbar"><div><h2>3. Processing</h2><p class="muted">Run analysis after all source files are uploaded.</p></div><button id="analyzeBtn">Start Analysis</button></div><div id="jobs" class="jobs empty">No processing jobs yet.</div><div id="jobMessage" class="analysis-status"></div><div class="analysis-grid"><div><h3>Inspection Summary</h3><div id="inspectionSummary" class="summary-list muted"></div></div><div><h3>Activity</h3><div id="activityFeed" class="activity-feed muted"></div></div></div></section>
 </main>
+
+<div id="fieldDrawer" class="drawer hidden" aria-hidden="true"><div class="drawer-backdrop" id="drawerBackdrop"></div><div class="drawer-panel"><div class="drawer-head"><div><div class="eyebrow">FIELD REVIEW</div><h2 id="drawerFieldName">Field</h2></div><button id="closeDrawer" class="secondary">Close</button></div><label>Value<textarea id="drawerValue" rows="3"></textarea></label><label>Status<select id="drawerStatus"><option value="review">Needs review</option><option value="accepted">Accepted</option><option value="conflict">Conflict</option><option value="not_applicable">Not applicable</option></select></label><div class="source-box"><strong>Source</strong><div id="drawerSource"></div><blockquote id="drawerExcerpt"></blockquote></div><button id="saveField">Save Field</button><div id="drawerMessage" class="analysis-status"></div></div></div>
 <script src="project.js"></script>
 </body></html>

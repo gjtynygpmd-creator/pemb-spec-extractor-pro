@@ -1,31 +1,21 @@
-# PEMB Spec Extractor Pro
+# PEMB Spec Extractor Pro v1.4.0
 
-A proprietary estimating application for uploading large bid packages, indexing relevant construction documents, extracting source-backed PEMB project data, reviewing conflicts, and preparing downstream exports.
+Production export release for PEMB estimating projects.
 
-## Repository Structure
+## Included
 
-- `frontend/` — Netlify web interface
-- `backend/` — FastAPI API and the background processing worker
-- `database/` — PostgreSQL migrations
-- `docs/` — architecture, roadmap, and deployment instructions
-- `tests/` — benchmark and automated tests
+- Persistent projects, uploads, processing jobs, indexed pages, and estimator review
+- Editable/manual extracted fields with review status and source references
+- Excel estimator workbook export
+- Complete extracted-data CSV export
+- Zoho-ready single-row CSV export
+- No database migration required from v1.3
 
-## Current Release
+## Deployment
 
-**v1.2 Processing Engine MVP**
+- Netlify base directory: `frontend`
+- Render root directory: `backend`
+- Render web command is supplied by the Dockerfile
+- Render worker command: `python -m app.worker`
 
-- Persistent projects and large multipart uploads
-- Background worker that claims queued jobs
-- PDF download and searchable-text inspection
-- Page classification and Division 05/07/08/13 detection
-- Initial source-backed PEMB field extraction
-- Conflict flagging and project activity timeline
-
-## Infrastructure
-
-- Netlify: frontend
-- Render: FastAPI backend and background worker
-- Cloudflare R2: source documents
-- Neon: PostgreSQL database
-
-Do not commit passwords, connection strings, API keys, or R2 credentials. Store them only as environment variables.
+See `deployment/IMPLEMENT_V1.4.0.md` for update and verification steps.

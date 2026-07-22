@@ -1,82 +1,48 @@
-
 const API_BASE=(window.PEMB_API_BASE||localStorage.getItem('pembApiBase')||'https://pemb-spec-extractor-pro.onrender.com').replace(/\/$/,'');
 const PROJECT_ID=new URLSearchParams(location.search).get('id');
 const PART_SIZE=16*1024*1024;
-let selected=[],workspace=null,pollTimer=null;
+const REQUIRED_FIELDS=[
+ ['Project','Project Address'],['Geometry','Building Width'],['Geometry','Building Length'],['Geometry','Eave Height'],['Geometry','Roof Slope'],
+ ['Codes & Loads','Building Code'],['Codes & Loads','Risk Category'],['Codes & Loads','Basic Wind Speed'],['Codes & Loads','Wind Exposure'],['Codes & Loads','Ground Snow Load'],['Codes & Loads','Roof Live Load'],['Codes & Loads','Seismic Design Category'],
+ ['Envelope','Roof Panel Gauge'],['Envelope','Wall Panel Gauge'],['Envelope','Roof Insulation'],['Envelope','Wall Insulation'],
+ ['Openings','Overhead Door'],['Accessories','Gutters'],['Accessories','Downspouts']
+];
+let selected=[],workspace=null,pollTimer=null,activeField=null;
 const $=id=>document.getElementById(id);
-const formatBytes=n=>{const u=['B','KB','MB','GB','TB'];let i=0,x=n||0;while(x>=1024&&i<u.length-1){x/=1024;i++}return `${x.toFixed(i<2?1:2)} ${u[i]}`};
 const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-async function api(path,options={}){
- const r=await fetch(API_BASE+path,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
- if(!r.ok)throw new Error(await r.text());return r.json()
-}
-async function loadWorkspace(){
- if(!PROJECT_ID){location.href='index.html';return}
- try{
-  workspace=await api(`/projects/${PROJECT_ID}/workspace`);
-  const p=workspace.project;
-  $('projectTitle').textContent=p.name;$('projectSubtitle').textContent=[p.customer,p.address].filter(Boolean).join(' • ')||'PEMB estimating project';
-  $('fileCount').textContent=p.file_count;$('fieldCount').textContent=p.field_count;$('conflictCount').textContent=p.conflict_count;$('projectState').textContent=p.status;$('pageCount').textContent=p.page_count||0;$('ocrCount').textContent=p.ocr_count||0;
-  renderStored();renderJobs();renderFields();renderInspection();renderActivity();schedulePolling()
- }catch(e){$('uploadMessage').textContent='Unable to load project: '+e.message;$('uploadMessage').className='analysis-status error'}
-}
-function addFiles(files){
- [...files].forEach(file=>{const key=`${file.name}:${file.size}:${file.lastModified}`;if(!selected.some(x=>x.key===key))selected.push({key,file,progress:0,status:'Ready'})});
- renderPending()
-}
-function renderPending(){
- $('pendingFiles').innerHTML=selected.map((x,i)=>`<div class="file-row"><div class="file-head"><div><div class="file-name">${escapeHtml(x.file.name)}</div><div class="file-meta">${formatBytes(x.file.size)}</div></div><button class="secondary remove" data-i="${i}">Remove</button></div><div class="progress"><div style="width:${x.progress}%"></div></div><div class="file-status">${escapeHtml(x.status)}</div></div>`).join('');
- document.querySelectorAll('.remove').forEach(b=>b.onclick=()=>{selected.splice(+b.dataset.i,1);renderPending()})
-}
+const formatBytes=n=>{const u=['B','KB','MB','GB'];let i=0,x=n||0;while(x>=1024&&i<u.length-1){x/=1024;i++}return `${x.toFixed(i<2?1:2)} ${u[i]}`};
+async function api(path,options={}){const r=await fetch(API_BASE+path,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});if(!r.ok)throw new Error(await r.text());return r.json()}
+async function loadWorkspace(){if(!PROJECT_ID){location.href='index.html';return}try{workspace=await api(`/projects/${PROJECT_ID}/workspace`);renderAll();schedulePolling()}catch(e){show('uploadMessage','Unable to load project: '+e.message,'error')}}
+function renderAll(){const p=workspace.project;$('projectTitle').textContent=p.name;$('projectSubtitle').textContent=[p.customer,p.address].filter(Boolean).join(' • ')||'PEMB estimating project';$('fileCount').textContent=p.file_count;$('fieldCount').textContent=p.field_count;$('conflictCount').textContent=p.conflict_count;$('projectState').textContent=p.status;$('pageCount').textContent=p.page_count||0;$('ocrCount').textContent=p.ocr_count||0;renderFilters();renderReview();renderStored();renderJobs();renderInspection();renderActivity()}
+function fieldMap(){const m=new Map();(workspace.fields||[]).forEach(f=>{if(!m.has(f.field_name)||f.status==='accepted')m.set(f.field_name,f)});return m}
+function getMissing(){const m=fieldMap();return REQUIRED_FIELDS.filter(([,name])=>!m.get(name)?.value)}
+function renderFilters(){const cats=[...new Set((workspace.fields||[]).map(f=>f.category))].sort();const current=$('categoryFilter').value;$('categoryFilter').innerHTML='<option value="">All categories</option>'+cats.map(c=>`<option ${c===current?'selected':''}>${escapeHtml(c)}</option>`).join('')}
+function renderReview(){const category=$('categoryFilter').value,status=$('statusFilter').value;const fields=(workspace.fields||[]).filter(f=>(!category||f.category===category)&&(!status||f.status===status));$('fieldCards').innerHTML=fields.length?fields.map(f=>`<button class="field-card status-${escapeHtml(f.status)}" data-id="${f.id}"><div class="field-card-top"><span class="field-category">${escapeHtml(f.category)}</span><span class="status-pill">${escapeHtml(f.status)}</span></div><strong>${escapeHtml(f.field_name)}</strong><div class="field-value">${escapeHtml(f.value||'Not found')}</div><div class="field-meta">${f.confidence!=null?Math.round(f.confidence*100)+'% confidence':'Manual'} • ${escapeHtml(sourceLabel(f)||'No source')}</div></button>`).join(''):'<div class="empty-state">No fields match this filter.</div>';document.querySelectorAll('.field-card').forEach(b=>b.onclick=()=>openField(b.dataset.id));
+ const missing=getMissing();$('missingCount').textContent=missing.length;const accepted=(workspace.fields||[]).filter(f=>f.status==='accepted').length;const total=Math.max(REQUIRED_FIELDS.length,(workspace.fields||[]).length);const progress=Math.round(accepted/total*100);$('reviewProgress').textContent=progress+'%';$('readinessBar').firstElementChild.style.width=progress+'%';$('readinessText').textContent=`${accepted} accepted field(s). ${missing.length} required item(s) still missing.`;$('missingList').innerHTML=missing.length?missing.map(([cat,name])=>`<button class="check-item missing" data-cat="${escapeHtml(cat)}" data-name="${escapeHtml(name)}"><span>!</span><div><strong>${escapeHtml(name)}</strong><small>${escapeHtml(cat)}</small></div></button>`).join(''):'<div class="check-ok">No required fields missing.</div>';$('conflictList').innerHTML=(workspace.fields||[]).filter(f=>f.status==='conflict').map(f=>`<button class="check-item conflict" data-id="${f.id}"><span>!</span><div><strong>${escapeHtml(f.field_name)}</strong><small>${escapeHtml(f.value||'Review conflict')}</small></div></button>`).join('')||'<div class="check-ok">No unresolved conflicts.</div>';document.querySelectorAll('.check-item[data-id]').forEach(b=>b.onclick=()=>openField(b.dataset.id));document.querySelectorAll('.check-item.missing').forEach(b=>b.onclick=()=>openManualField(b.dataset.cat,b.dataset.name))}
+function sourceLabel(f){return [f.source_file,f.source_sheet,f.source_page?`page ${f.source_page}`:''].filter(Boolean).join(' • ')}
+function openField(id){activeField=(workspace.fields||[]).find(f=>f.id===id);if(!activeField)return;$('drawerFieldName').textContent=activeField.field_name;$('drawerValue').value=activeField.value||'';$('drawerStatus').value=['review','accepted','conflict','not_applicable'].includes(activeField.status)?activeField.status:'review';$('drawerSource').textContent=sourceLabel(activeField)||'No source recorded';$('drawerExcerpt').textContent=activeField.source_excerpt||'No source excerpt is available.';showDrawer()}
+function openManualField(category,name){activeField={manual:true,category,field_name:name,value:'',status:'review'};$('drawerFieldName').textContent=name;$('drawerValue').value='';$('drawerStatus').value='review';$('drawerSource').textContent='Manual estimator entry';$('drawerExcerpt').textContent='Enter the confirmed project value and save it for this estimate.';showDrawer()}
+function showDrawer(){$('drawerMessage').textContent='';$('fieldDrawer').classList.remove('hidden');$('fieldDrawer').setAttribute('aria-hidden','false')}
+function closeDrawer(){$('fieldDrawer').classList.add('hidden');$('fieldDrawer').setAttribute('aria-hidden','true');activeField=null}
+async function saveField(){if(!activeField)return;const payload={value:$('drawerValue').value.trim()||null,status:$('drawerStatus').value};try{if(activeField.manual)await api(`/fields/projects/${PROJECT_ID}`,{method:'POST',body:JSON.stringify({...payload,category:activeField.category,field_name:activeField.field_name})});else await api(`/fields/${activeField.id}`,{method:'PATCH',body:JSON.stringify(payload)});show('drawerMessage','Field saved.','success');await loadWorkspace();setTimeout(closeDrawer,450)}catch(e){show('drawerMessage','Could not save field: '+e.message,'error')}}
+function addFiles(files){[...files].forEach(file=>{const key=`${file.name}:${file.size}:${file.lastModified}`;if(!selected.some(x=>x.key===key))selected.push({key,file,progress:0,status:'Ready'})});renderPending()}
+function renderPending(){$('pendingFiles').innerHTML=selected.map((x,i)=>`<div class="file-row"><div class="file-head"><div><div class="file-name">${escapeHtml(x.file.name)}</div><div class="file-meta">${formatBytes(x.file.size)}</div></div><button class="secondary remove" data-i="${i}">Remove</button></div><div class="progress"><div style="width:${x.progress}%"></div></div><div class="file-status">${escapeHtml(x.status)}</div></div>`).join('');document.querySelectorAll('.remove').forEach(b=>b.onclick=()=>{selected.splice(+b.dataset.i,1);renderPending()})}
 function updatePending(i,progress,status){selected[i].progress=progress;selected[i].status=status;renderPending()}
-async function uploadOne(item,i){
- const f=item.file;
- const init=await api('/uploads/init',{method:'POST',body:JSON.stringify({project_id:PROJECT_ID,filename:f.name,content_type:f.type||'application/octet-stream',size:f.size,part_size:PART_SIZE})});
- const count=Math.ceil(f.size/PART_SIZE),parts=[];
- for(let p=1;p<=count;p++){
-  const start=(p-1)*PART_SIZE,end=Math.min(p*PART_SIZE,f.size);
-  const signed=await api('/uploads/part-url',{method:'POST',body:JSON.stringify({upload_id:init.upload_id,object_key:init.object_key,part_number:p})});
-  const response=await fetch(signed.url,{method:'PUT',body:f.slice(start,end),headers:signed.headers||{}});
-  if(!response.ok)throw new Error(`Upload part ${p} failed`);
-  const etag=(response.headers.get('etag')||'').replaceAll('"','');
-  if(!etag)throw new Error('Cloud storage did not return an ETag. Check the R2 bucket CORS policy.');
-  parts.push({part_number:p,etag});
-  updatePending(i,Math.round(end/f.size*100),`Uploaded part ${p} of ${count}`)
- }
- await api('/uploads/complete',{method:'POST',body:JSON.stringify({upload_id:init.upload_id,object_key:init.object_key,project_id:PROJECT_ID,filename:f.name,content_type:f.type||'application/octet-stream',size:f.size,parts})});
- updatePending(i,100,'Upload complete')
-}
-async function uploadSelected(){
- if(!selected.length){show('uploadMessage','Select files first.','error');return}
- $('uploadBtn').disabled=true;
- try{
-  for(let i=0;i<selected.length;i++)await uploadOne(selected[i],i);
-  show('uploadMessage',`${selected.length} file(s) uploaded successfully.`,'success');
-  selected=[];renderPending();await loadWorkspace()
- }catch(e){show('uploadMessage','Upload failed: '+e.message,'error')}
- $('uploadBtn').disabled=false
-}
-function renderStored(){
- $('storedFiles').innerHTML=workspace.files.length?workspace.files.map(f=>`<div class="stored-file"><div><strong>${escapeHtml(f.filename)}</strong><div class="file-meta">${formatBytes(f.size_bytes)} • ${escapeHtml(f.content_type||'unknown type')}</div></div><span class="badge">${escapeHtml(f.status)}</span></div>`).join(''):'<div class="muted">No files uploaded yet.</div>'
-}
-function renderJobs(){
- $('jobs').className='jobs';$('jobs').innerHTML=workspace.jobs.length?workspace.jobs.map(j=>`<div class="job-card"><div class="job-main"><div class="job-title">${escapeHtml(j.stage||j.status)}</div><div class="job-details">${escapeHtml(j.message||'')} • ${new Date(j.created_at).toLocaleString()}</div><div class="progress job-progress"><div style="width:${Math.max(0,Math.min(100,j.progress||0))}%"></div></div></div><div class="badge">${escapeHtml(j.status)} ${j.progress}%</div></div>`).join(''):'<div class="muted">No processing jobs yet.</div>'
-}
-function renderInspection(){const i=workspace.inspection||{};const parts=[];(i.page_types||[]).forEach(x=>parts.push(`<span class="summary-chip">${escapeHtml(x.type)}: <strong>${x.count}</strong></span>`));(i.divisions||[]).forEach(x=>parts.push(`<span class="summary-chip">Division ${escapeHtml(x.division)}: <strong>${x.count}</strong></span>`));$('inspectionSummary').innerHTML=parts.length?parts.join(''):'<span class="muted">Run analysis to index pages.</span>'}
-function renderActivity(){const events=workspace.events||[];$('activityFeed').innerHTML=events.length?events.map(e=>`<div class="activity-item"><strong>${escapeHtml(e.stage)}</strong><span>${escapeHtml(e.message||'')}</span><small>${e.progress}% • ${new Date(e.created_at).toLocaleString()}</small></div>`).join(''):'<span class="muted">No activity yet.</span>'}
-function schedulePolling(){clearTimeout(pollTimer);const active=(workspace.jobs||[]).some(j=>['queued','processing'].includes(j.status));if(active)pollTimer=setTimeout(loadWorkspace,4000)}
-function renderFields(){
- $('fieldsBody').innerHTML=workspace.fields.length?workspace.fields.map(f=>`<tr><td>${escapeHtml(f.category)}</td><td><strong>${escapeHtml(f.field_name)}</strong></td><td>${escapeHtml(f.value||'')}</td><td>${f.confidence??''}</td><td>${escapeHtml([f.source_file,f.source_sheet,f.source_page?`p. ${f.source_page}`:''].filter(Boolean).join(' • '))}</td><td>${escapeHtml(f.status)}</td></tr>`).join(''):'<tr><td colspan="6" class="muted">No extracted fields yet.</td></tr>'
-}
-async function startAnalysis(){
- try{const j=await api('/jobs',{method:'POST',body:JSON.stringify({project_id:PROJECT_ID})});show('jobMessage','Analysis job queued successfully.','success');await loadWorkspace()}
- catch(e){show('jobMessage','Could not start analysis: '+e.message,'error')}
+async function uploadOne(item,i){const f=item.file;const init=await api('/uploads/init',{method:'POST',body:JSON.stringify({project_id:PROJECT_ID,filename:f.name,content_type:f.type||'application/octet-stream',size:f.size,part_size:PART_SIZE})});const count=Math.ceil(f.size/PART_SIZE),parts=[];for(let p=1;p<=count;p++){const start=(p-1)*PART_SIZE,end=Math.min(p*PART_SIZE,f.size);const signed=await api('/uploads/part-url',{method:'POST',body:JSON.stringify({upload_id:init.upload_id,object_key:init.object_key,part_number:p})});const response=await fetch(signed.url,{method:'PUT',body:f.slice(start,end),headers:signed.headers||{}});if(!response.ok)throw new Error(`Upload part ${p} failed`);const etag=(response.headers.get('etag')||'').replaceAll('"','');if(!etag)throw new Error('Cloud storage did not return an ETag.');parts.push({part_number:p,etag});updatePending(i,Math.round(end/f.size*100),`Uploaded part ${p} of ${count}`)}await api('/uploads/complete',{method:'POST',body:JSON.stringify({upload_id:init.upload_id,object_key:init.object_key,project_id:PROJECT_ID,filename:f.name,content_type:f.type||'application/octet-stream',size:f.size,parts})});updatePending(i,100,'Upload complete')}
+async function uploadSelected(){if(!selected.length){show('uploadMessage','Select files first.','error');return}$('uploadBtn').disabled=true;try{for(let i=0;i<selected.length;i++)await uploadOne(selected[i],i);show('uploadMessage',`${selected.length} file(s) uploaded successfully.`,'success');selected=[];renderPending();await loadWorkspace()}catch(e){show('uploadMessage','Upload failed: '+e.message,'error')}$('uploadBtn').disabled=false}
+function renderStored(){$('storedFiles').innerHTML=workspace.files.length?workspace.files.map(f=>`<div class="stored-file"><div><strong>${escapeHtml(f.filename)}</strong><div class="file-meta">${formatBytes(f.size_bytes)} • ${escapeHtml(f.content_type||'unknown type')}</div></div><span class="badge">${escapeHtml(f.status)}</span></div>`).join(''):'<div class="muted">No files uploaded yet.</div>'}
+function renderJobs(){$('jobs').innerHTML=workspace.jobs.length?workspace.jobs.map(j=>`<div class="job-card"><div class="job-main"><div class="job-title">${escapeHtml(j.stage||j.status)}</div><div class="job-details">${escapeHtml(j.message||'')} • ${new Date(j.created_at).toLocaleString()}</div><div class="progress job-progress"><div style="width:${Math.max(0,Math.min(100,j.progress||0))}%"></div></div></div><div class="badge">${escapeHtml(j.status)} ${j.progress}%</div></div>`).join(''):'<div class="muted">No processing jobs yet.</div>'}
+function renderInspection(){const i=workspace.inspection||{},parts=[];(i.page_types||[]).forEach(x=>parts.push(`<span class="summary-chip">${escapeHtml(x.type)}: <strong>${x.count}</strong></span>`));(i.divisions||[]).forEach(x=>parts.push(`<span class="summary-chip">Division ${escapeHtml(x.division)}: <strong>${x.count}</strong></span>`));$('inspectionSummary').innerHTML=parts.length?parts.join(''):'<span class="muted">Run analysis to index pages.</span>'}
+function renderActivity(){$('activityFeed').innerHTML=(workspace.events||[]).map(e=>`<div class="activity-item"><strong>${escapeHtml(e.stage)}</strong><span>${escapeHtml(e.message||'')}</span><small>${e.progress}% • ${new Date(e.created_at).toLocaleString()}</small></div>`).join('')||'<span class="muted">No activity yet.</span>'}
+function schedulePolling(){clearTimeout(pollTimer);if((workspace.jobs||[]).some(j=>['queued','processing'].includes(j.status)))pollTimer=setTimeout(loadWorkspace,4000)}
+async function startAnalysis(){try{await api('/jobs',{method:'POST',body:JSON.stringify({project_id:PROJECT_ID})});show('jobMessage','Analysis job queued successfully.','success');await loadWorkspace()}catch(e){show('jobMessage','Could not start analysis: '+e.message,'error')}}
+
+function downloadExport(format){
+ if(!PROJECT_ID)return;
+ const allowed={xlsx:'xlsx',csv:'csv',zoho:'zoho-csv'};
+ const path=allowed[format];
+ if(!path)return;
+ window.location.href=`${API_BASE}/exports/projects/${PROJECT_ID}/${path}`;
 }
 function show(id,text,type=''){const e=$(id);e.textContent=text;e.className=`analysis-status ${type}`}
-const dz=$('dropzone'),fi=$('fileInput');
-fi.onchange=e=>addFiles(e.target.files);
-['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));
-['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));
-dz.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
-$('clearFiles').onclick=()=>{selected=[];renderPending()};$('uploadBtn').onclick=uploadSelected;$('refreshBtn').onclick=loadWorkspace;$('analyzeBtn').onclick=startAnalysis;
-loadWorkspace();
+const dz=$('dropzone'),fi=$('fileInput');fi.onchange=e=>addFiles(e.target.files);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));dz.addEventListener('drop',e=>addFiles(e.dataTransfer.files));$('clearFiles').onclick=()=>{selected=[];renderPending()};$('uploadBtn').onclick=uploadSelected;$('refreshBtn').onclick=loadWorkspace;$('analyzeBtn').onclick=startAnalysis;$('categoryFilter').onchange=renderReview;$('statusFilter').onchange=renderReview;$('closeDrawer').onclick=closeDrawer;$('drawerBackdrop').onclick=closeDrawer;$('saveField').onclick=saveField;$('exportXlsx').onclick=()=>downloadExport('xlsx');$('exportCsv').onclick=()=>downloadExport('csv');$('exportZoho').onclick=()=>downloadExport('zoho');loadWorkspace();
