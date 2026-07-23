@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.7.1 — CORS Hotfix
+- Fixed browser preflight failures between the Netlify frontend and Render API.
+- Production Netlify origin is now always allowed, even when Render has an older `CORS_ORIGINS` environment value.
+- Added support for Netlify deploy-preview origins.
+- Updated dashboard version badge.
+
 ## v1.7.0 - Field Test Release
 
 - Expanded Geometry Engine: width, length, area, orientation, frame type, ridge offset, BSW/FSW eave heights, and front/back roof slopes.

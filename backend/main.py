@@ -21,9 +21,31 @@ class Settings(BaseSettings):
     upload_expiration_seconds: int = 3600
 settings=Settings()
 
-app=FastAPI(title="PEMB Spec Extractor Pro API",version="1.7.0")
-app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
-                   allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
+app=FastAPI(title="PEMB Spec Extractor Pro API",version="1.7.1")
+
+def _allowed_origins() -> list[str]:
+    required = {
+        "https://pemb-spec-extractor-pro.netlify.app",
+        "http://localhost:8888",
+        "http://localhost:3000",
+        "http://127.0.0.1:8888",
+    }
+    configured = {
+        origin.strip().rstrip("/")
+        for origin in settings.cors_origins.split(",")
+        if origin.strip()
+    }
+    return sorted(required | configured)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins(),
+    allow_origin_regex=r"https://.*--pemb-spec-extractor-pro\.netlify\.app",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    max_age=86400,
+)
 
 projects: dict[str,dict[str,Any]]={}
 jobs: dict[str,dict[str,Any]]={}
