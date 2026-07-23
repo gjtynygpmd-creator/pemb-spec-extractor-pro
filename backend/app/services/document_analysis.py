@@ -132,7 +132,7 @@ FIELD_RULES: tuple[FieldRule, ...] = (
         r"\b(white\s+vinyl|vinyl[- ]faced|foil[- ]faced|FSK|WMP[- ]?VR|VRR)\b[^\n]{0,100}?wall",
     ), 0.84, ("specification", "elevation", "wall_section"), ("07", "13")),
     FieldRule("Envelope", "Roof Panel Type", (
-        r"(?:roof\s+panel|roofing)\s*[:\-]?\s*([^\n.;]{4,100}(?:standing\s+seam|panel)[^\n.;]{0,60})",
+        r"(?:roof\s+panels?|roofing)\s*(?:shall\s+be|:|\-)?\s*\b(standing\s+seam|mechanically\s+seamed|concealed[- ]fastener|PBR|R[- ]?Panel)\b",
         r"((?:mechanically\s+seamed|vertical\s+rib|trapezoidal)[^\n.;]{0,70}standing\s+seam[^\n.;]{0,50})",
         r"(Loc\s+Seam\s+90/360\s+Roof\s+Panel)",
     ), 0.86, ("specification",), ("13",)),
@@ -426,6 +426,93 @@ def _validate_targeted_value(field_name: str, value: str, excerpt: str) -> str |
     return value
 
 
+
+
+ACCESSORY_FIELDS = {"Gutters", "Downspouts", "Ridge Vents", "Roof Curbs", "Framed Openings"}
+BOOLEAN_SCOPE_FIELDS = ACCESSORY_FIELDS | {"Canopies"}
+
+
+def _canonical_scope_value(field_name: str, value: str, excerpt: str = "") -> str | None:
+    """Convert narrative scope language into short estimator-ready values."""
+    context = normalize_space(f"{value} {excerpt}")
+    low = context.lower()
+    if re.search(r"\b(?:exclude|excluded|not\s+included|by\s+others|not\s+in\s+contract)\b", low):
+        return "Excluded"
+    if re.search(r"\b(?:provide|furnish|install|include|included|required|by\s+pemb|pemb\s+(?:manufacturer|supplier))\b", low):
+        # Preserve a useful size/gauge when one is explicitly tied to the field.
+        size = re.search(r"\b(\d{1,2}(?:\s*[x×]\s*\d{1,2})?\s*(?:inch(?:es)?|in\.?|\"|ga(?:uge)?|gauge))\b", context, re.I)
+        if size:
+            return f"Included - {normalize_space(size.group(1))}"
+        return "Included"
+    if field_name in {"Gutters", "Downspouts"} and re.search(r"\b(?:gutter|downspout)s?\b", low):
+        return "Specified"
+    if field_name == "Ridge Vents" and re.search(r"\bridge\s+vents?\b", low):
+        return "Specified"
+    if field_name == "Roof Curbs" and re.search(r"\broof\s+curbs?\b", low):
+        return "Specified"
+    if field_name == "Framed Openings" and re.search(r"\bframed\s+openings?\b", low):
+        return "Specified"
+    return None
+
+
+def clean_estimator_value(field_name: str, value: str, excerpt: str = "") -> str | None:
+    """Final field-specific validation and normalization for all extraction methods."""
+    value = normalize_space(value)
+    if not value:
+        return None
+    if field_name in BOOLEAN_SCOPE_FIELDS:
+        return _canonical_scope_value(field_name, value, excerpt)
+    if field_name in {"Roof Panel Gauge", "Wall Panel Gauge"}:
+        m = re.search(r"\b(1[89]|2[0-9])\s*(?:ga(?:uge)?|gauge)?\b", value, re.I)
+        return f"{m.group(1)} ga" if m else None
+    if field_name in {"Roof Panel Type", "Wall Panel Type"}:
+        patterns = (
+            (r"standing\s+seam|mechanically\s+seamed", "Standing Seam"),
+            (r"concealed[- ]fastener", "Concealed-Fastener Panel"),
+            (r"\bpbr\b", "PBR Panel"),
+            (r"\br[- ]?panel\b", "R-Panel"),
+            (r"insulated\s+metal\s+panel|\bimp\b", "Insulated Metal Panel"),
+            (r"metal\s+panel\s+system", "Metal Panel System"),
+        )
+        low = value.lower()
+        for pattern, canonical in patterns:
+            if re.search(pattern, low, re.I):
+                return canonical
+        return None
+    if field_name in {"Overhead Doors", "Personnel Doors", "Louvers"}:
+        # Keep only a count when available. Narrative schedule fragments are not clean values.
+        m = re.search(r"\b(\d+)\s+reference", value, re.I)
+        if m:
+            return f"{m.group(1)} reference(s)"
+        m = re.search(r"\bqty\.?\s*[:=-]?\s*(\d+)\b", f"{value} {excerpt}", re.I)
+        return f"{m.group(1)}" if m else "Specified"
+    if field_name == "Project Address":
+        return value if re.search(r"\b[A-Z]{2}\s+\d{5}\b", value, re.I) else None
+    if field_name == "Total Square Feet":
+        m = re.search(r"([\d,]+(?:\.\d+)?)", value)
+        return f"{m.group(1)} sf" if m else None
+    if len(value) > 90:
+        return None
+    return normalize_field_value(field_name, value)
+
+
+def candidate_quality(candidate: dict, page_type: str | None = None, division: str | None = None) -> float:
+    """Rank clean values above long narrative or weak inferred candidates."""
+    score = float(candidate.get("confidence") or 0)
+    value = candidate.get("value") or ""
+    method = candidate.get("match_method") or ""
+    if len(value) <= 32:
+        score += 0.05
+    elif len(value) > 70:
+        score -= 0.10
+    if method in {"design_criteria", "system_spec", "assembly_context", "drawing_slope"}:
+        score += 0.03
+    if method.endswith("inference"):
+        score -= 0.03
+    if division in {"13", "07"} and candidate.get("category") in {"Envelope", "Insulation", "Accessories"}:
+        score += 0.03
+    return max(0.0, min(1.0, score))
+
 CORE_ESTIMATOR_FIELDS = {
     "Project Address", "Bid Due", "Building Width", "Building Length", "Total Square Feet",
     "Frame Type", "Building Orientation", "Ridge Offset", "BSW Eave Height", "FSW Eave Height", "Eave Height",
@@ -473,7 +560,7 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
                 excerpt = normalize_space(variant[excerpt_start:excerpt_end])
                 value = _validate_targeted_value(rule.field_name, value, excerpt)
                 if value:
-                    value = normalize_field_value(rule.field_name, value)
+                    value = clean_estimator_value(rule.field_name, value, excerpt)
                 if not value or len(value) > 220:
                     continue
                 key = (rule.field_name, normalized_compare(value, rule.field_name))
@@ -501,7 +588,10 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
             for match in re.finditer(pattern, compact, flags=re.IGNORECASE | re.MULTILINE):
                 value = _clean_generic_value(rule.field_name, match.group(1))
                 if value:
-                    value = normalize_field_value(rule.field_name, value)
+                    excerpt_start = max(0, match.start() - 120)
+                    excerpt_end = min(len(compact), match.end() + 180)
+                    excerpt = normalize_space(compact[excerpt_start:excerpt_end])
+                    value = clean_estimator_value(rule.field_name, value, excerpt)
                 if not value:
                     continue
                 key = (rule.field_name, normalized_compare(value, rule.field_name))
@@ -523,7 +613,12 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
     # specific rules so real drawings do not need perfect label/value sentences.
     intelligence_text = blocks_text or text
     for candidate in extract_page_intelligence(intelligence_text, page_type=page_type, division=division):
-        key = (candidate["field_name"], normalized_compare(candidate["value"], candidate["field_name"]))
+        cleaned = clean_estimator_value(candidate["field_name"], candidate.get("value", ""), candidate.get("source_excerpt", ""))
+        if not cleaned:
+            continue
+        candidate["value"] = cleaned
+        candidate["quality_score"] = candidate_quality(candidate, page_type, division)
+        key = (candidate["field_name"], normalized_compare(cleaned, candidate["field_name"]))
         if key in seen:
             continue
         seen.add(key)
@@ -585,15 +680,15 @@ def _extract_spec_systems(text: str, division: str | None) -> list[dict]:
     if division not in {"07", "13", None} and "PRE-ENGINEERED METAL BUILDING" not in upper:
         return results
     system_rules = (
-        ("Envelope", "Roof Panel Type", r"(?:ROOF\s+PANELS?|METAL\s+ROOFING)[^\n]{0,220}?\b(STANDING\s+SEAM|MECHANICALLY\s+SEAMED|CONCEALED[- ]FASTENER|PBR|R[- ]?PANEL)\b", 0.92),
-        ("Envelope", "Wall Panel Type", r"(?:WALL\s+PANELS?|METAL\s+SIDING)[^\n]{0,220}?\b(PBR|R[- ]?PANEL|INSULATED\s+METAL\s+PANEL|CONCEALED[- ]FASTENER|METAL\s+PANEL\s+SYSTEM)\b", 0.91),
-        ("Envelope", "Roof Panel Gauge", r"(?:ROOF\s+PANELS?|STANDING\s+SEAM)[^\n]{0,220}?\b(2[246])\s*(?:GAUGE|GA\.)", 0.92),
-        ("Envelope", "Wall Panel Gauge", r"(?:WALL\s+PANELS?|METAL\s+SIDING)[^\n]{0,220}?\b(2[468])\s*(?:GAUGE|GA\.)", 0.91),
-        ("Accessories", "Gutters", r"\b(GUTTERS?[^\n.;]{0,180}(?:PROVIDE|SIZE|GAUGE|DOWNSPOUT|PEMB|MANUFACTURER)[^\n.;]{0,100})", 0.84),
-        ("Accessories", "Downspouts", r"\b(DOWNSPOUTS?[^\n.;]{0,180}(?:PROVIDE|SIZE|GAUGE|PEMB|MANUFACTURER)[^\n.;]{0,100})", 0.84),
-        ("Accessories", "Ridge Vents", r"\b(RIDGE\s+VENTS?[^\n.;]{0,180})", 0.84),
-        ("Accessories", "Roof Curbs", r"\b(ROOF\s+CURBS?[^\n.;]{0,180})", 0.83),
-        ("Openings", "Framed Openings", r"\b(FRAMED\s+OPENINGS?[^\n.;]{0,220})", 0.86),
+        ("Envelope", "Roof Panel Type", r"\b(STANDING\s+SEAM|MECHANICALLY\s+SEAMED|CONCEALED[- ]FASTENER|PBR|R[- ]?PANEL)\b[^\n.;]{0,90}?(?:ROOF\s+PANELS?|METAL\s+ROOFING)", 0.92),
+        ("Envelope", "Wall Panel Type", r"\b(PBR|R[- ]?PANEL|INSULATED\s+METAL\s+PANEL|CONCEALED[- ]FASTENER|METAL\s+PANEL\s+SYSTEM)\b[^\n.;]{0,90}?(?:WALL\s+PANELS?|METAL\s+SIDING)", 0.91),
+        ("Envelope", "Roof Panel Gauge", r"\b(1[89]|2[0-9])\s*(?:GAUGE|GA\.)[^\n.;]{0,100}?(?:ROOF\s+PANELS?|STANDING\s+SEAM|METAL\s+ROOFING)", 0.92),
+        ("Envelope", "Wall Panel Gauge", r"\b(1[89]|2[0-9])\s*(?:GAUGE|GA\.)(?:(?!ROOF\s+PANELS?).){0,70}?(?:WALL\s+PANELS?|METAL\s+SIDING)", 0.91),
+        ("Accessories", "Gutters", r"\b(GUTTERS?)\b", 0.84),
+        ("Accessories", "Downspouts", r"\b(DOWNSPOUTS?)\b", 0.84),
+        ("Accessories", "Ridge Vents", r"\b(RIDGE\s+VENTS?)\b", 0.84),
+        ("Accessories", "Roof Curbs", r"\b(ROOF\s+CURBS?)\b", 0.83),
+        ("Openings", "Framed Openings", r"\b(FRAMED\s+OPENINGS?)\b", 0.86),
     )
     for category, name, pattern, confidence in system_rules:
         m = re.search(pattern, text, re.I)

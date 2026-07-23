@@ -1,3 +1,12 @@
+## v1.8.1 - Estimator Value Engine
+
+- Separates candidate discovery from estimator-ready values.
+- Converts narrative accessory scope into Included, Excluded, or Specified.
+- Adds field-specific validation for panel types, gauges, openings, square footage, and addresses.
+- Ranks concise validated values above long source passages.
+- Reduces false conflicts by comparing normalized clean values.
+- Adds regression tests for accessory scope and roof/wall panel assemblies.
+
 # Changelog
 
 ## v1.8.0 - Real Drawing Extraction Engine

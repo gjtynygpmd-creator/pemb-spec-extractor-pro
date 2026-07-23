@@ -86,3 +86,29 @@ def test_semantic_normalization_avoids_false_conflicts():
     assert normalize_field_value("Ground Snow Load", "20") == "20 psf"
     assert normalize_field_value("Wall Panel Type", "R PANEL") == "R-Panel"
     assert normalized_compare("R-30", "Roof Insulation R-Value") == normalized_compare("R 30", "Roof Insulation R-Value")
+
+
+def test_accessory_scope_is_clean_value():
+    text = 'Provide gutters, downspouts, gable trim, and eave trim by PEMB manufacturer.'
+    fields = extract_fields(text, page_type='specification', division='13')
+    found = {f['field_name']: f['value'] for f in fields}
+    assert found['Gutters'] == 'Included'
+    assert found['Downspouts'] == 'Included'
+
+
+def test_excluded_accessory_is_normalized():
+    text = 'Gutters and downspouts are excluded from the PEMB supplier scope and provided by others.'
+    fields = extract_fields(text, page_type='specification', division='13')
+    found = {f['field_name']: f['value'] for f in fields}
+    assert found['Gutters'] == 'Excluded'
+    assert found['Downspouts'] == 'Excluded'
+
+
+def test_panel_values_are_estimator_ready():
+    text = 'Provide 24 gauge mechanically seamed standing seam roof panels and 26 gauge PBR wall panels.'
+    fields = extract_fields(text, page_type='specification', division='13')
+    found = {f['field_name']: f['value'] for f in fields}
+    assert found['Roof Panel Type'] == 'Standing Seam'
+    assert found['Wall Panel Type'] == 'PBR Panel'
+    assert found['Roof Panel Gauge'] == '24 ga'
+    assert found['Wall Panel Gauge'] == '26 ga'

@@ -17,7 +17,7 @@ from app.models.project import (
     Project,
     UploadedFile,
 )
-from app.services.document_analysis import classify_page, extract_fields, normalized_compare, normalize_field_value
+from app.services.document_analysis import classify_page, extract_fields, normalized_compare, normalize_field_value, candidate_quality
 from app.services.storage import get_s3
 from app.core.config import settings
 
@@ -158,12 +158,21 @@ def process_job(job_id: str):
             for field_name, candidates in all_candidates.items():
                 if field_name in manual_names:
                     continue
-                ranked = sorted(candidates, key=lambda c: (c["confidence"], len(c.get("source_excerpt") or "")), reverse=True)
+                ranked = sorted(
+                    candidates,
+                    key=lambda c: (c.get("quality_score", candidate_quality(c)), c["confidence"], -len(c.get("value") or "")),
+                    reverse=True,
+                )
                 best = ranked[0]
-                # Only flag a conflict when a materially different candidate is nearly as authoritative.
-                # Weak keyword hits no longer force a valid high-confidence value into conflict status.
-                credible = [c for c in ranked if c["confidence"] >= max(0.78, best["confidence"] - 0.06)]
-                unique_values = {normalized_compare(c["value"], field_name) for c in credible}
+                best_score = best.get("quality_score", candidate_quality(best))
+                # Conflict only when two clean, materially different values have comparable authority.
+                # Narrative scope statements normalize to Included/Excluded/Specified and no longer conflict.
+                credible = [
+                    c for c in ranked
+                    if c.get("quality_score", candidate_quality(c)) >= max(0.80, best_score - 0.04)
+                    and c["confidence"] >= 0.80
+                ]
+                unique_values = {normalized_compare(c["value"], field_name) for c in credible if c.get("value")}
                 status = "conflict" if len(unique_values) > 1 else "review"
                 db.add(ExtractedField(
                     project_id=job.project_id,
@@ -182,7 +191,20 @@ def process_job(job_id: str):
 
             event(db, job, "checking_conflicts", 94, "Checking duplicate values and conflicts")
             field_count = len([name for name in all_candidates if name not in manual_names]) + len(manual_names)
-            conflict_count = sum(1 for name, items in all_candidates.items() if name not in manual_names and len({normalized_compare(x['value'], name) for x in items if x['confidence'] >= max(0.78, max(y['confidence'] for y in items)-0.06)}) > 1)
+            conflict_count = 0
+            for name, items in all_candidates.items():
+                if name in manual_names or not items:
+                    continue
+                scores = [x.get('quality_score', candidate_quality(x)) for x in items]
+                best_score = max(scores)
+                values = {
+                    normalized_compare(x['value'], name)
+                    for x in items
+                    if x.get('value')
+                    and x.get('quality_score', candidate_quality(x)) >= max(0.80, best_score - 0.04)
+                    and x['confidence'] >= 0.80
+                }
+                conflict_count += int(len(values) > 1)
             job.status = "completed"
             job.stage = "completed"
             job.progress = 100
@@ -209,7 +231,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.8.0 Real Drawing Engine started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.8.1 Estimator Value Engine started; poll interval=%ss", POLL_SECONDS)
     while True:
         job_id = claim_job()
         if job_id:
