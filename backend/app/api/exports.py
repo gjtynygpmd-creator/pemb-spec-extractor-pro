@@ -193,16 +193,23 @@ REQUIRED_EXPORT_FIELDS = [
     ("Project", "Project Address"),
     ("Geometry", "Building Width"),
     ("Geometry", "Building Length"),
-    ("Geometry", "Eave Height"),
-    ("Geometry", "Roof Slope"),
+    ("Geometry", "Building Orientation"),
+    ("Framing", "Frame Type"),
+    ("Geometry", "BSW Eave Height"),
+    ("Geometry", "FSW Eave Height"),
+    ("Geometry", "Ridge Offset"),
+    ("Geometry", "Front Roof Slope"),
+    ("Geometry", "Back Roof Slope"),
     ("Codes & Loads", "Building Code"),
     ("Codes & Loads", "Risk Category"),
     ("Codes & Loads", "Basic Wind Speed"),
     ("Codes & Loads", "Wind Exposure"),
     ("Codes & Loads", "Ground Snow Load"),
     ("Codes & Loads", "Seismic Design Category"),
-    ("Roof", "Roof Panel"),
-    ("Walls", "Wall Panel"),
+    ("Envelope", "Roof Panel Type"),
+    ("Envelope", "Roof Panel Gauge"),
+    ("Envelope", "Wall Panel Type"),
+    ("Envelope", "Wall Panel Gauge"),
     ("Insulation", "Roof Insulation Type"),
     ("Insulation", "Roof Insulation R-Value"),
     ("Insulation", "Roof Insulation Thickness"),
@@ -248,7 +255,7 @@ def _build_pdf(project, fields) -> bytes:
     small = ParagraphStyle("Small", parent=body, fontSize=7.5, leading=9, textColor=muted)
     white_body = ParagraphStyle("WhiteBody", parent=body, textColor=colors.white, fontName="Helvetica-Bold")
     story = [
-        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.6.0 ESTIMATOR CORE", eyebrow),
+        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.7.0 FIELD TEST RELEASE", eyebrow),
         Paragraph(_pdf_text(project.name), title_style),
         Paragraph("Estimator summary generated from reviewed, extracted, and manually entered project data.", small),
         Spacer(1, 10),
@@ -256,7 +263,7 @@ def _build_pdf(project, fields) -> bytes:
     project_rows = [
         ["Project", _pdf_text(project.name), "Status", _pdf_text(project.status)],
         ["Customer", _pdf_text(project.customer or "Not provided"), "Bid Due", _pdf_text(project.bid_due.isoformat() if project.bid_due else "Not provided")],
-        ["Address", _pdf_text(project.address or "Not provided"), "Exported UTC", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")],
+        ["Address", _pdf_text((project.address or ((mapping.get("Project Address").value if mapping.get("Project Address") else None)) or "Not provided")), "Exported UTC", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")],
     ]
     project_table = Table([[Paragraph(str(c), body) for c in row] for row in project_rows], colWidths=[0.85*inch, 2.45*inch, 0.85*inch, 2.45*inch])
     project_table.setStyle(TableStyle([

@@ -32,7 +32,7 @@ FIELD_RULES: tuple[FieldRule, ...] = (
         r"(?:clear\s+)?eave\s*[:=\-]?\s*(\d+(?:\s*[-']\s*\d+(?:\s*\d+/\d+)?\s*[\"”]?)?\s*(?:ft|feet|['’])?)",
     ), 0.86, ("elevation", "structural_notes")),
     FieldRule("Geometry", "Roof Slope", (
-        r"roof\s+(?:slope|pitch)\s*[:=\-]?\s*([0-9.]+\s*(?::|/)\s*12)",
+        r"roof\s+(?:slope|pitch)\s*[:=\-]?\s*([0-9.]+\s*(?::|/)\s*12|[0-9.]+\s*(?:in(?:ch)?(?:es)?|\")\s+per\s+(?:foot|1[\'’]-?0[\"]?))",
         r"(?:slope|pitch)\s*[:=\-]?\s*([0-9.]+\s*(?::|/)\s*12)",
         r"([0-9.]+\s*(?::|/)\s*12)\s+(?:roof\s+)?slope",
     ), 0.90, ("roof_plan", "elevation", "structural_notes")),
@@ -219,6 +219,17 @@ FIELD_RULES: tuple[FieldRule, ...] = (
     FieldRule("Codes & Loads", "Dead Load", (
         r"(?:roof\s+)?dead\s+load\s*[:=\-–—]?\s*(\d+(?:\.\d+)?)\s*psf",
     ), 0.91, ("structural_notes", "specification"), ("13",)),
+    FieldRule("Geometry", "Building Orientation", (
+        r"(?:building\s+orientation|frame\s+configuration|roof\s+configuration)\s*[:=\-]?\s*(gable|single[- ]slope|double[- ]slope|lean[- ]to|multi[- ]span)",
+        r"\b(gable|single[- ]slope|double[- ]slope|lean[- ]to|multi[- ]span)\s+(?:building|frame|roof)",
+    ), 0.88, ("roof_plan", "elevation", "framing_plan", "structural_notes"), ("13",)),
+    FieldRule("Framing", "Frame Type", (
+        r"(?:frame\s+type|primary\s+framing|structural\s+system)\s*[:=\-]?\s*(clear[- ]span|multi[- ]span|modular|rigid\s+frame|single[- ]slope|lean[- ]to)",
+        r"\b(clear[- ]span|multi[- ]span|modular|rigid\s+frame)\s+(?:frame|framing|building)",
+    ), 0.88, ("framing_plan", "structural_notes", "specification"), ("05", "13")),
+    FieldRule("Geometry", "Total Square Feet", (
+        r"(?:total\s+(?:building\s+)?area|gross\s+area|building\s+area|total\s+square\s+feet)\s*[:=\-]?\s*([\d,]+(?:\.\d+)?\s*(?:s\.?f\.?|sq\.?\s*ft\.?|square\s+feet))",
+    ), 0.93, ("general_notes", "roof_plan", "foundation_plan")),
 )
 
 
@@ -281,14 +292,57 @@ def normalize_space(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip(" :;,-")
 
 
-def normalized_compare(value: str) -> str:
-    return re.sub(r"[^a-z0-9.]", "", value.lower())
+def normalize_field_value(field_name: str, value: str) -> str:
+    """Normalize estimator values for display and reliable duplicate/conflict comparison."""
+    v = normalize_space(value)
+    low = v.lower()
+    panel_aliases = {
+        "r panel": "R-Panel", "r-panel": "R-Panel", "rpanel": "R-Panel",
+        "pbr": "PBR Panel", "pbr panel": "PBR Panel",
+        "imp": "Insulated Metal Panel", "insulated metal panel": "Insulated Metal Panel",
+    }
+    if field_name in {"Roof Panel Type", "Wall Panel Type"}:
+        key = re.sub(r"[^a-z0-9]+", " ", low).strip()
+        for alias, canonical in panel_aliases.items():
+            if alias in key:
+                return canonical
+    if field_name in {"Basic Wind Speed"}:
+        m = re.search(r"(\d{2,3})", v)
+        return f"{m.group(1)} mph" if m else v
+    if field_name in {"Ground Snow Load", "Roof Snow Load", "Roof Live Load", "Dead Load", "Collateral Load"}:
+        m = re.search(r"(\d+(?:\.\d+)?)", v)
+        return f"{m.group(1)} psf" if m else v
+    if field_name in {"Roof Slope", "Front Roof Slope", "Back Roof Slope"}:
+        m = re.search(r"([0-9.]+)\s*(?::|/)\s*12", v)
+        if m:
+            return f"{m.group(1)}:12"
+        m = re.search(r"([0-9.]+)\s*(?:in(?:ch)?(?:es)?|\")\s+per\s+(?:foot|1[\'’]-?0)", v, re.I)
+        if m:
+            return f"{m.group(1)}:12"
+    if field_name in {"Building Width", "Building Length", "Eave Height", "BSW Eave Height", "FSW Eave Height", "Ridge Offset"}:
+        v = v.replace("feet", "ft").replace("foot", "ft")
+    if field_name in {"Risk Category"}:
+        roman = {"1":"I","2":"II","3":"III","4":"IV"}
+        return roman.get(v.strip(), v.upper())
+    if field_name in {"Wind Exposure", "Site Class", "Seismic Design Category"}:
+        return v.upper()
+    if field_name in {"Roof Insulation R-Value", "Wall Insulation R-Value", "Roof Insulation", "Wall Insulation"}:
+        m = re.search(r"R\s*-?\s*(\d+(?:\.\d+)?)", v, re.I)
+        return f"R-{m.group(1)}" if m else v
+    return v
+
+
+def normalized_compare(value: str, field_name: str | None = None) -> str:
+    canonical = normalize_field_value(field_name or "", value)
+    return re.sub(r"[^a-z0-9.]", "", canonical.lower())
 
 
 def classify_page(text: str) -> tuple[str, str | None, str | None, str | None]:
     upper = text.upper()
     division = None
     for number in ("03", "05", "07", "08", "09", "13"):
+        # CSI priority: 13 34 19, 05 12 00, 05 50 00, 07 21 00, 07 41/42/62/72
+
         if re.search(rf"\bDIVISION\s+{number}\b", upper) or re.search(rf"\b{number}\s+\d{{2}}\s+\d{{2}}\b", upper):
             division = number
             break
@@ -369,7 +423,7 @@ def _validate_targeted_value(field_name: str, value: str, excerpt: str) -> str |
 
 CORE_ESTIMATOR_FIELDS = {
     "Project Address", "Bid Due", "Building Width", "Building Length", "Total Square Feet",
-    "Frame Type", "Ridge Offset", "BSW Eave Height", "FSW Eave Height", "Eave Height",
+    "Frame Type", "Building Orientation", "Ridge Offset", "BSW Eave Height", "FSW Eave Height", "Eave Height",
     "Roof Panel Type", "Front Roof Slope", "Back Roof Slope", "Roof Slope", "Roof Panel Gauge",
     "Wall Panel Type", "Wall Panel Gauge", "Roof Insulation", "Wall Insulation",
     "Roof Insulation Type", "Roof Insulation R-Value", "Roof Insulation Thickness", "Roof Insulation Facing",
@@ -394,8 +448,8 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
     for category, field_name, pattern, confidence in special_rules:
         m = re.search(pattern, text, re.I | re.M)
         if m:
-            value = normalize_space(m.group(1))
-            seen.add((field_name, normalized_compare(value)))
+            value = normalize_field_value(field_name, normalize_space(m.group(1)))
+            seen.add((field_name, normalized_compare(value, field_name)))
             found.append({"category": category, "field_name": field_name, "value": value, "confidence": confidence, "source_excerpt": normalize_space(text[max(0,m.start()-100):min(len(text),m.end()+140)])})
     for rule in FIELD_RULES:
         if rule.field_name not in CORE_ESTIMATOR_FIELDS:
@@ -411,9 +465,11 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
                 excerpt_end = min(len(variant), match.end() + 220)
                 excerpt = normalize_space(variant[excerpt_start:excerpt_end])
                 value = _validate_targeted_value(rule.field_name, value, excerpt)
+                if value:
+                    value = normalize_field_value(rule.field_name, value)
                 if not value or len(value) > 220:
                     continue
-                key = (rule.field_name, normalized_compare(value))
+                key = (rule.field_name, normalized_compare(value, rule.field_name))
                 if key in seen:
                     matched = True
                     break
@@ -437,9 +493,11 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
         for pattern in rule.patterns:
             for match in re.finditer(pattern, compact, flags=re.IGNORECASE | re.MULTILINE):
                 value = _clean_generic_value(rule.field_name, match.group(1))
+                if value:
+                    value = normalize_field_value(rule.field_name, value)
                 if not value:
                     continue
-                key = (rule.field_name, normalized_compare(value))
+                key = (rule.field_name, normalized_compare(value, rule.field_name))
                 if key in seen:
                     continue
                 seen.add(key)

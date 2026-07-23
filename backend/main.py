@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     upload_expiration_seconds: int = 3600
 settings=Settings()
 
-app=FastAPI(title="PEMB Spec Extractor Pro API",version="0.4")
+app=FastAPI(title="PEMB Spec Extractor Pro API",version="1.7.0")
 app.add_middleware(CORSMiddleware,allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
                    allow_credentials=True,allow_methods=["*"],allow_headers=["*"])
 

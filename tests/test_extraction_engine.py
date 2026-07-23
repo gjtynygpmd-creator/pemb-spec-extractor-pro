@@ -67,3 +67,22 @@ def test_detailed_wall_insulation_fields():
     assert 'batt' in found['Wall Insulation Type'].lower()
     assert '4' in found['Wall Insulation Thickness']
     assert 'foil' in found['Wall Insulation Facing'].lower()
+
+
+def test_geometry_field_test_release():
+    text = """ROOF PLAN\nBuilding Width: 150'-0"\nBuilding Length: 200'-0"\nFrame Type: Clear Span\nBuilding Orientation: Gable\nRidge Offset: 75'-0"\nFront Roof Slope: 0.25:12\nBack Roof Slope: 0.25:12\nFSW Eave Height: 24'-0"\nBSW Eave Height: 24'-0"""
+    values = {x["field_name"]: x["value"] for x in extract_fields(text, page_type="roof_plan", division="13")}
+    assert values["Building Width"].startswith("150")
+    assert values["Building Length"].startswith("200")
+    assert values["Frame Type"].lower() == "clear span"
+    assert values["Building Orientation"].lower() == "gable"
+    assert values["Front Roof Slope"] == "0.25:12"
+    assert values["Back Roof Slope"] == "0.25:12"
+
+
+def test_semantic_normalization_avoids_false_conflicts():
+    from app.services.document_analysis import normalize_field_value, normalized_compare
+    assert normalize_field_value("Basic Wind Speed", "115") == "115 mph"
+    assert normalize_field_value("Ground Snow Load", "20") == "20 psf"
+    assert normalize_field_value("Wall Panel Type", "R PANEL") == "R-Panel"
+    assert normalized_compare("R-30", "Roof Insulation R-Value") == normalized_compare("R 30", "Roof Insulation R-Value")
