@@ -1,4 +1,4 @@
-# PEMB Spec Extractor Pro v1.7.1 Field Test Release
+# PEMB Spec Extractor Pro v1.8.0 Field Test Release
 
 ## Insulation Core Release
 

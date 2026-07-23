@@ -109,6 +109,12 @@ def process_job(job_id: str):
                         page = document.load_page(index)
                         text = page.get_text("text") or ""
                         text = text.strip()
+                        # Preserve block-level reading order for schedules, notes, and dimension callouts.
+                        blocks = page.get_text("blocks") or []
+                        blocks_text = "\n".join(
+                            str(block[4]).strip() for block in sorted(blocks, key=lambda b: (round(b[1] / 18), b[0]))
+                            if len(block) > 4 and str(block[4]).strip()
+                        )
                         is_searchable = len(text) >= 40
                         needs_ocr = not is_searchable
                         searchable_pages += int(is_searchable)
@@ -129,7 +135,7 @@ def process_job(job_id: str):
                         ))
 
                         if is_searchable:
-                            for candidate in extract_fields(text, page_type=page_type, division=division):
+                            for candidate in extract_fields(text, page_type=page_type, division=division, blocks_text=blocks_text):
                                 candidate.update({
                                     "source_file": source.filename,
                                     "source_page": index + 1,
@@ -203,7 +209,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.7.0 Field Test started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.8.0 Real Drawing Engine started; poll interval=%ss", POLL_SECONDS)
     while True:
         job_id = claim_job()
         if job_id:

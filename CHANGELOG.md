@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.8.0 - Real Drawing Extraction Engine
+- Adds page-specific extraction passes for structural criteria, geometry, envelope systems, insulation, openings, and accessories.
+- Preserves PDF text-block reading order for schedules and callouts.
+- Improves sheet classification using title-block text.
+- Infers overall building dimensions from plan and elevation dimensions with confidence metadata.
+- Expands the estimator field registry so existing accessory and opening rules reach the dashboard.
+- Adds tolerance for flattened tables and common PDF text errors such as BOOF/ROOF and $1/S1.
+
+
 ## v1.7.2 - Export Hotfix
 - Fixed PDF export HTTP 500 caused by using the field mapping before it was initialized.
 - Updated PDF and Excel release labels.

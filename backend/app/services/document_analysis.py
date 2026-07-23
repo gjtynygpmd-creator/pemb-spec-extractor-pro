@@ -47,8 +47,8 @@ FIELD_RULES: tuple[FieldRule, ...] = (
         r"use\s+group\s*[:\-]?\s*([^\n.;]{2,60})",
     ), 0.82, ("structural_notes", "specification")),
     FieldRule("Codes & Loads", "Risk Category", (
-        r"risk\s+category(?:\s+of\s+building)?\s*[:\-=]?\s*(I{1,3}|IV|[1-4])\b",
-        r"risk\s+category(?:\s+of\s+building)?\s*[-–—]\s*(I{1,3}|IV|[1-4])\b",
+        r"risk\s+category(?:\s+of\s+building)?\s*[:\-=]?\s*(IV|III|II|I|[1-4])\b",
+        r"risk\s+category(?:\s+of\s+building)?\s*[-–—]\s*(IV|III|II|I|[1-4])\b",
     ), 0.94, ("structural_notes", "specification"), ("13",)),
     FieldRule("Codes & Loads", "Basic Wind Speed", (
         r"(?:ultimate\s+)?(?:basic\s+)?wind\s+speed\s*[:=\-–—]?\s*(\d{2,3})\s*(?:mph)?",
@@ -339,6 +339,8 @@ def normalized_compare(value: str, field_name: str | None = None) -> str:
 
 def classify_page(text: str) -> tuple[str, str | None, str | None, str | None]:
     upper = text.upper()
+    nonempty_lines = [normalize_space(x) for x in text.splitlines() if x.strip()]
+    title_zone = "\n".join(nonempty_lines[-35:]).upper()
     division = None
     for number in ("03", "05", "07", "08", "09", "13"):
         # CSI priority: 13 34 19, 05 12 00, 05 50 00, 07 21 00, 07 41/42/62/72
@@ -347,20 +349,23 @@ def classify_page(text: str) -> tuple[str, str | None, str | None, str | None]:
             division = number
             break
 
+    # Specific sheet titles must outrank generic notes because title blocks often
+    # contain references to "general notes" on every architectural sheet.
     categories = (
-        ("structural_notes", ("STRUCTURAL GENERAL NOTES", "DESIGN CRITERIA", "DESIGN LOADS")),
-        ("general_notes", ("GENERAL NOTES",)),
-        ("door_schedule", ("DOOR SCHEDULE", "OVERHEAD DOOR SCHEDULE", "WINDOW SCHEDULE")),
+        ("door_schedule", ("DOOR SCHEDULE", "DOOR SCHEDULES", "OVERHEAD DOOR SCHEDULE", "WINDOW SCHEDULE")),
         ("roof_plan", ("ROOF PLAN",)),
-        ("framing_plan", ("ROOF FRAMING PLAN", "MEZZANINE FRAMING PLAN", "FRAMING PLAN")),
         ("foundation_plan", ("FOUNDATION PLAN",)),
-        ("elevation", ("EXTERIOR ELEVATION", "BUILDING ELEVATION", "ELEVATIONS")),
-        ("wall_section", ("WALL SECTION",)),
+        ("framing_plan", ("ROOF FRAMING PLAN", "CEILING FRAMING PLAN", "MEZZANINE FRAMING PLAN", "FRAMING PLAN")),
+        ("elevation", ("EXTERIOR ELEVATION", "BUILDING ELEVATION", "BUILDING ELEVATIONS")),
+        ("wall_section", ("WALL SECTION", "WALL SECTIONS", "BUILDING SECTION", "BUILDING SECTIONS")),
+        ("structural_notes", ("STRUCTURAL GENERAL NOTES", "DESIGN CRITERIA", "DESIGN LOADS")),
         ("specification", ("SECTION ", "PART 1 - GENERAL", "PART 1  GENERAL", "PART 2 - PRODUCTS", "PART 2 PRODUCTS")),
+        ("general_notes", ("GENERAL NOTES", "PROJECT INFORMATION", "FLOOR DIMENSION PLAN", "FLOOR PLAN")),
     )
     page_type = "unclassified"
     for candidate, needles in categories:
-        if any(n in upper for n in needles):
+        search_zone = upper if candidate == "specification" else title_zone
+        if any(n in search_zone for n in needles):
             page_type = candidate
             break
 
@@ -430,11 +435,13 @@ CORE_ESTIMATOR_FIELDS = {
     "Wall Insulation Type", "Wall Insulation R-Value", "Wall Insulation Thickness", "Wall Insulation Facing", "Risk Category",
     "Building Code", "Roof Live Load", "Dead Load", "Collateral Load", "Ground Snow Load",
     "Roof Snow Load", "Basic Wind Speed", "Wind Exposure", "Site Class", "Seismic Design Category",
-    "S1", "Ss", "Occupancy"
+    "S1", "Ss", "Occupancy", "Snow Exposure Factor", "Thermal Factor",
+    "Gutters", "Downspouts", "Ridge Vents", "Roof Curbs", "Framed Openings",
+    "Overhead Doors", "Personnel Doors", "Louvers"
 }
 
 
-def extract_fields(text: str, page_type: str | None = None, division: str | None = None) -> list[dict]:
+def extract_fields(text: str, page_type: str | None = None, division: str | None = None, blocks_text: str | None = None) -> list[dict]:
     # Search both original text and a line-normalized copy. The second form helps
     # when PDF extraction inserts line breaks between labels and values.
     variants: Iterable[str] = (text, re.sub(r"[\t\r]+", " ", text))
@@ -512,4 +519,192 @@ def extract_fields(text: str, page_type: str | None = None, division: str | None
                     "source_excerpt": excerpt,
                     "match_method": "universal_label",
                 })
+    # v1.8 page-intelligence pass. This uses reconstructed text blocks and page-type
+    # specific rules so real drawings do not need perfect label/value sentences.
+    intelligence_text = blocks_text or text
+    for candidate in extract_page_intelligence(intelligence_text, page_type=page_type, division=division):
+        key = (candidate["field_name"], normalized_compare(candidate["value"], candidate["field_name"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(candidate)
     return found
+
+
+# ---------------------------------------------------------------------------
+# v1.8 REAL DRAWING EXTRACTION ENGINE
+# ---------------------------------------------------------------------------
+
+DIMENSION_TOKEN = r"(?:\d{1,3}\s*['’](?:\s*[- ]?\s*\d{1,2}(?:\s+\d+/\d+)?\s*[\"”])?|\d{1,3}\s*(?:FT|FEET))"
+
+
+def _candidate(category: str, field_name: str, value: str, confidence: float, excerpt: str, method: str) -> dict:
+    return {
+        "category": category,
+        "field_name": field_name,
+        "value": normalize_field_value(field_name, normalize_space(value)),
+        "confidence": max(0.40, min(0.99, confidence)),
+        "source_excerpt": normalize_space(excerpt)[:700],
+        "match_method": method,
+    }
+
+
+def _nearby_excerpt(text: str, start: int, end: int, radius: int = 180) -> str:
+    return text[max(0, start-radius):min(len(text), end+radius)]
+
+
+def _extract_design_criteria(text: str) -> list[dict]:
+    """Tolerance-heavy extraction for flattened structural design-criteria tables."""
+    results: list[dict] = []
+    rules = (
+        ("Codes & Loads", "Building Code", r"\b((?:20)?\d{2}\s+(?:INTERNATIONAL\s+BUILDING\s+CODE|IBC|TENNESSEE\s+BUILDING\s+CODE))\b", 0.95),
+        ("Codes & Loads", "Ground Snow Load", r"(?:GROUND\s+SNOW\s+LOAD|P\s*G)\D{0,35}(\d+(?:\.\d+)?)\s*PSF", 0.96),
+        ("Codes & Loads", "Roof Snow Load", r"(?:FLAT\s+ROOF\s+SNOW\s+LOAD|ROOF\s+SNOW\s+LOAD|P\s*F)\D{0,35}(\d+(?:\.\d+)?)\s*PSF", 0.96),
+        ("Codes & Loads", "Roof Live Load", r"ROOF\s+LIVE\s+LOAD\D{0,35}(\d+(?:\.\d+)?)\s*PSF", 0.96),
+        ("Codes & Loads", "Basic Wind Speed", r"(?:WIND\s+SPEED(?:\s*\(3\s*SECOND\s*GUST\))?|V\s*ULT)\D{0,40}(\d{2,3})\s*MPH", 0.97),
+        ("Codes & Loads", "Wind Exposure", r"(?:WIND\s+EXPOSURE|EXPOSURE\s+CATEGORY)\D{0,20}([BCD])\b", 0.94),
+        ("Codes & Loads", "Risk Category", r"RISK\s+CATEGORY\s*[:=\-]?\s*(IV|III|II|I|[1-4])\b", 0.95),
+        ("Codes & Loads", "Site Class", r"SITE\s+CLASS\D{0,20}([A-F])\b", 0.94),
+        ("Codes & Loads", "Seismic Design Category", r"SEISMIC\s+DESIGN\s+CATEGORY\D{0,20}([A-F])\b", 0.97),
+        ("Codes & Loads", "Ss", r"(?:MAPPED\s+SPECTRAL\s+ACCELERATION\D{0,30})?S\s*S\s*[:=]?\s*(0?\.\d+)", 0.94),
+        ("Codes & Loads", "S1", r"(?:\bS\s*1\b|\$\s*1)\s*[:=]?\s*(0?\.\d+)", 0.93),
+        ("Codes & Loads", "Snow Exposure Factor", r"(?:SNOW\s+)?EXPOSURE\s+FACTOR\D{0,20}(\d+(?:\.\d+)?)", 0.91),
+        ("Codes & Loads", "Thermal Factor", r"THERMAL\s+FACTOR\D{0,20}(\d+(?:\.\d+)?)", 0.91),
+    )
+    upper = text.upper().replace("BOOF", "ROOF")
+    for category, name, pattern, confidence in rules:
+        for m in re.finditer(pattern, upper, re.I | re.S):
+            results.append(_candidate(category, name, m.group(1), confidence, _nearby_excerpt(text, m.start(), m.end()), "design_criteria"))
+            break
+    return results
+
+
+def _extract_spec_systems(text: str, division: str | None) -> list[dict]:
+    results: list[dict] = []
+    upper = text.upper()
+    if division not in {"07", "13", None} and "PRE-ENGINEERED METAL BUILDING" not in upper:
+        return results
+    system_rules = (
+        ("Envelope", "Roof Panel Type", r"(?:ROOF\s+PANELS?|METAL\s+ROOFING)[^\n]{0,220}?\b(STANDING\s+SEAM|MECHANICALLY\s+SEAMED|CONCEALED[- ]FASTENER|PBR|R[- ]?PANEL)\b", 0.92),
+        ("Envelope", "Wall Panel Type", r"(?:WALL\s+PANELS?|METAL\s+SIDING)[^\n]{0,220}?\b(PBR|R[- ]?PANEL|INSULATED\s+METAL\s+PANEL|CONCEALED[- ]FASTENER|METAL\s+PANEL\s+SYSTEM)\b", 0.91),
+        ("Envelope", "Roof Panel Gauge", r"(?:ROOF\s+PANELS?|STANDING\s+SEAM)[^\n]{0,220}?\b(2[246])\s*(?:GAUGE|GA\.)", 0.92),
+        ("Envelope", "Wall Panel Gauge", r"(?:WALL\s+PANELS?|METAL\s+SIDING)[^\n]{0,220}?\b(2[468])\s*(?:GAUGE|GA\.)", 0.91),
+        ("Accessories", "Gutters", r"\b(GUTTERS?[^\n.;]{0,180}(?:PROVIDE|SIZE|GAUGE|DOWNSPOUT|PEMB|MANUFACTURER)[^\n.;]{0,100})", 0.84),
+        ("Accessories", "Downspouts", r"\b(DOWNSPOUTS?[^\n.;]{0,180}(?:PROVIDE|SIZE|GAUGE|PEMB|MANUFACTURER)[^\n.;]{0,100})", 0.84),
+        ("Accessories", "Ridge Vents", r"\b(RIDGE\s+VENTS?[^\n.;]{0,180})", 0.84),
+        ("Accessories", "Roof Curbs", r"\b(ROOF\s+CURBS?[^\n.;]{0,180})", 0.83),
+        ("Openings", "Framed Openings", r"\b(FRAMED\s+OPENINGS?[^\n.;]{0,220})", 0.86),
+    )
+    for category, name, pattern, confidence in system_rules:
+        m = re.search(pattern, text, re.I)
+        if m:
+            results.append(_candidate(category, name, m.group(1), confidence, _nearby_excerpt(text, m.start(), m.end()), "system_spec"))
+    return results
+
+
+def _extract_roof_and_wall_assemblies(text: str) -> list[dict]:
+    results: list[dict] = []
+    upper = text.upper()
+    insulation_rules = (
+        ("Insulation", "Roof Insulation R-Value", r"(?:ROOF|PURLIN)[^\n]{0,180}?\bR\s*[- ]?\s*(\d{1,3})\b", 0.93),
+        ("Insulation", "Wall Insulation R-Value", r"(?:WALL|GIRT)[^\n]{0,180}?\bR\s*[- ]?\s*(\d{1,3})\b", 0.93),
+        ("Insulation", "Roof Insulation Type", r"(?:ROOF|PURLIN)[^\n]{0,180}?\b(BATT|BLANKET|FIBERGLASS|RIGID|POLYISO|SPRAY[- ]FOAM|LINER\s+SYSTEM)\b", 0.88),
+        ("Insulation", "Wall Insulation Type", r"(?:WALL|GIRT)[^\n]{0,180}?\b(BATT|BLANKET|FIBERGLASS|RIGID|POLYISO|SPRAY[- ]FOAM|LINER\s+SYSTEM)\b", 0.88),
+        ("Insulation", "Roof Insulation Facing", r"(?:ROOF|PURLIN)[^\n]{0,220}?\b(FOIL[- ]FACED|VINYL[- ]FACED|FSK|WMP[- ]?VR|VAPOR\s+RETARDER)\b", 0.87),
+        ("Insulation", "Wall Insulation Facing", r"(?:WALL|GIRT)[^\n]{0,220}?\b(FOIL[- ]FACED|VINYL[- ]FACED|FSK|WMP[- ]?VR|VAPOR\s+RETARDER)\b", 0.87),
+    )
+    for category, name, pattern, confidence in insulation_rules:
+        m = re.search(pattern, upper, re.I)
+        if m:
+            value = f"R-{m.group(1)}" if "R-Value" in name else m.group(1)
+            results.append(_candidate(category, name, value, confidence, _nearby_excerpt(text, m.start(), m.end()), "assembly_context"))
+    return results
+
+
+def _extract_geometry_from_drawing(text: str, page_type: str | None) -> list[dict]:
+    """Infer overall dimensions and elevation heights from plan/elevation text.
+
+    We deliberately require drawing context and select the largest plausible dimensions,
+    which avoids mistaking door/window dimensions for building geometry.
+    """
+    if page_type not in {"roof_plan", "foundation_plan", "framing_plan", "elevation", "wall_section"}:
+        return []
+    results: list[dict] = []
+    tokens: list[tuple[float, str, int, int]] = []
+    for m in re.finditer(r"\b(\d{2,3})\s*['’](?:\s*[- ]?\s*(\d{1,2})(?:\s+(\d+/\d+))?\s*[\"”])?", text):
+        feet = float(m.group(1))
+        inches = float(m.group(2) or 0)
+        if m.group(3):
+            num, den = m.group(3).split('/')
+            inches += float(num)/float(den)
+        value = feet + inches/12.0
+        if 10 <= value <= 1000:
+            tokens.append((value, normalize_space(m.group(0)), m.start(), m.end()))
+    if page_type in {"roof_plan", "foundation_plan", "framing_plan"} and tokens:
+        unique = []
+        for item in sorted(tokens, reverse=True):
+            if all(abs(item[0]-x[0]) > 0.25 for x in unique):
+                unique.append(item)
+        if unique:
+            results.append(_candidate("Geometry", "Building Length", unique[0][1], 0.82, _nearby_excerpt(text, unique[0][2], unique[0][3]), "plan_dimension_inference"))
+        if len(unique) > 1:
+            results.append(_candidate("Geometry", "Building Width", unique[1][1], 0.80, _nearby_excerpt(text, unique[1][2], unique[1][3]), "plan_dimension_inference"))
+    if page_type in {"elevation", "wall_section"} and tokens:
+        height_tokens = [x for x in tokens if 10 <= x[0] <= 60]
+        if height_tokens:
+            # Prefer dimensions appearing near EAVE/T.O. labels; otherwise use a plausible high value.
+            labeled = [x for x in height_tokens if re.search(r"EAVE|T\.?O\.?\s+(?:STEEL|FRAME|ROOF)|RIDGE", _nearby_excerpt(text, x[2], x[3], 90), re.I)]
+            best = max(labeled or height_tokens, key=lambda x: x[0])
+            results.append(_candidate("Geometry", "Eave Height", best[1], 0.84 if labeled else 0.74, _nearby_excerpt(text, best[2], best[3]), "elevation_dimension_inference"))
+        overall = []
+        for item in sorted([x for x in tokens if x[0] >= 50], reverse=True):
+            if all(abs(item[0]-x[0]) > 0.25 for x in overall): overall.append(item)
+        if overall:
+            results.append(_candidate("Geometry", "Building Length", overall[0][1], 0.84, _nearby_excerpt(text, overall[0][2], overall[0][3]), "elevation_overall_dimension"))
+        if len(overall) > 1:
+            results.append(_candidate("Geometry", "Building Width", overall[1][1], 0.82, _nearby_excerpt(text, overall[1][2], overall[1][3]), "elevation_overall_dimension"))
+    # Roof slope variants common on drawings: 1/4" / 12", 1/4" per 1'-0", 0.25:12
+    slope_patterns = (
+        r"(\d+(?:\.\d+)?|\d+/\d+)\s*[\"”]?\s*(?:/|PER)\s*(?:12\s*[\"”]?|1\s*['’]\s*-?\s*0\s*[\"”]?)",
+        r"(\d+(?:\.\d+)?)\s*:\s*12",
+    )
+    for pattern in slope_patterns:
+        m = re.search(pattern, text, re.I)
+        if m:
+            raw = m.group(1)
+            if '/' in raw:
+                a,b=raw.split('/'); raw=str(round(float(a)/float(b),3)).rstrip('0').rstrip('.')
+            results.append(_candidate("Geometry", "Roof Slope", f"{raw}:12", 0.90 if page_type=="roof_plan" else 0.83, _nearby_excerpt(text,m.start(),m.end()), "drawing_slope"))
+            break
+    return results
+
+
+def _extract_openings(text: str, page_type: str | None) -> list[dict]:
+    if page_type not in {"door_schedule", "elevation", "general_notes"}:
+        return []
+    results: list[dict] = []
+    upper = text.upper()
+    overhead = re.findall(r"(?:OVERHEAD|COILING|ROLL[- ]?UP)\s+DOOR[^\n]{0,100}", upper)
+    if overhead:
+        results.append(_candidate("Openings", "Overhead Doors", f"{len(overhead)} reference(s): {overhead[0]}", 0.78, overhead[0], "opening_schedule"))
+    doors = re.findall(r"\b(?:HM|HOLLOW\s+METAL|ALUMINUM)\s+DOOR[^\n]{0,80}", upper)
+    if doors:
+        results.append(_candidate("Openings", "Personnel Doors", f"{len(doors)} reference(s): {doors[0]}", 0.72, doors[0], "opening_schedule"))
+    louvers = re.findall(r"\bLOUVER[^\n]{0,100}", upper)
+    if louvers:
+        results.append(_candidate("Openings", "Louvers", f"{len(louvers)} reference(s): {louvers[0]}", 0.74, louvers[0], "opening_schedule"))
+    return results
+
+
+def extract_page_intelligence(text: str, page_type: str | None = None, division: str | None = None) -> list[dict]:
+    """Run specialized extraction passes based on the classified page type."""
+    results: list[dict] = []
+    if page_type in {"structural_notes", "general_notes", "unclassified"}:
+        results.extend(_extract_design_criteria(text))
+    if page_type == "specification" or division in {"07", "13"}:
+        results.extend(_extract_spec_systems(text, division))
+    if page_type in {"wall_section", "roof_plan", "elevation", "specification"}:
+        results.extend(_extract_roof_and_wall_assemblies(text))
+    results.extend(_extract_geometry_from_drawing(text, page_type))
+    results.extend(_extract_openings(text, page_type))
+    return results
