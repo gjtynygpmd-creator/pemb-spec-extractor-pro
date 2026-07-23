@@ -119,7 +119,7 @@ def export_xlsx(project_id: str, db: Session = Depends(get_db)):
     wb = Workbook()
     summary = wb.active
     summary.title = "Project Summary"
-    summary.append(["PEMB Spec Extractor Pro", "v1.6.1 Insulation Core"])
+    summary.append(["PEMB Spec Extractor Pro", "v1.7.2 Export Hotfix"])
     summary.append(["Project Name", project.name])
     summary.append(["Customer", project.customer or ""])
     summary.append(["Address", project.address or ""])
@@ -255,11 +255,12 @@ def _build_pdf(project, fields) -> bytes:
     small = ParagraphStyle("Small", parent=body, fontSize=7.5, leading=9, textColor=muted)
     white_body = ParagraphStyle("WhiteBody", parent=body, textColor=colors.white, fontName="Helvetica-Bold")
     story = [
-        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.7.0 FIELD TEST RELEASE", eyebrow),
+        Paragraph("PEMB SPEC EXTRACTOR PRO - v1.7.2 EXPORT HOTFIX", eyebrow),
         Paragraph(_pdf_text(project.name), title_style),
         Paragraph("Estimator summary generated from reviewed, extracted, and manually entered project data.", small),
         Spacer(1, 10),
     ]
+    mapping = _latest_field_map(fields)
     project_rows = [
         ["Project", _pdf_text(project.name), "Status", _pdf_text(project.status)],
         ["Customer", _pdf_text(project.customer or "Not provided"), "Bid Due", _pdf_text(project.bid_due.isoformat() if project.bid_due else "Not provided")],
@@ -275,7 +276,6 @@ def _build_pdf(project, fields) -> bytes:
     ]))
     story.extend([project_table, Spacer(1, 10)])
 
-    mapping = _latest_field_map(fields)
     accepted = sum(1 for f in fields if f.status == "accepted")
     conflicts = sum(1 for f in fields if f.status == "conflict")
     missing = [(cat, name) for cat, name in REQUIRED_EXPORT_FIELDS if not mapping.get(name) or not (mapping[name].value or "").strip()]
