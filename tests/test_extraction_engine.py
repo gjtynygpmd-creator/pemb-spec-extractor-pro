@@ -112,3 +112,40 @@ def test_panel_values_are_estimator_ready():
     assert found['Wall Panel Type'] == 'PBR Panel'
     assert found['Roof Panel Gauge'] == '24 ga'
     assert found['Wall Panel Gauge'] == '26 ga'
+
+
+def test_wind_speed_does_not_grab_eave_height_number():
+    text = '''DESIGN CRITERIA\nWIND SPEED (3 SECOND GUST)\nEAVE HEIGHT 24'-0"\nWIND SPEED VALUE NOT SHOWN'''
+    values = as_map(text)
+    assert values.get('Basic Wind Speed') != '24 mph'
+
+
+def test_page_classifier_recognizes_floor_dimension_plan():
+    from app.services.document_analysis import classify_page
+    text = 'A-102\nFLOOR DIMENSION PLAN\nDECATUR COUNTY AG PLEX'
+    page_type, _, _, title = classify_page(text)
+    assert page_type == 'floor_plan'
+    assert title == 'Floor Dimension Plan'
+
+
+def test_low_signal_drawing_is_not_rich_text():
+    from app.services.document_analysis import rich_text_layer
+    assert not rich_text_layer('A-201\nNORTH\n1/8" = 1\'-0"\nDECATUR COUNTY')
+
+
+def test_spatial_block_pairs_wind_label_with_nearby_value():
+    from app.services.document_analysis import extract_spatial_fields
+    blocks = [
+        (100, 100, 260, 125, 'WIND SPEED (3 SECOND GUST)', 0, 0),
+        (300, 100, 380, 125, '114 MPH', 0, 0),
+        (100, 160, 260, 185, 'EAVE HEIGHT', 0, 0),
+        (300, 160, 380, 185, '24\'-0"', 0, 0),
+    ]
+    found = {x['field_name']: x['value'] for x in extract_spatial_fields(blocks, page_type='structural_notes')}
+    assert found['Basic Wind Speed'] == '114 mph'
+    assert found['Eave Height'].startswith('24')
+
+
+def test_fractional_roof_slope_normalizes_correctly():
+    from app.services.document_analysis import normalize_field_value
+    assert normalize_field_value('Roof Slope', '3/8:12') == '0.375:12'

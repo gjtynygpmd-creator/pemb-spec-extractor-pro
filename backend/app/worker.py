@@ -6,6 +6,8 @@ import time
 from datetime import datetime
 
 import fitz
+from PIL import Image
+import pytesseract
 from sqlalchemy import delete, select
 
 from app.db.session import Base, SessionLocal, engine
@@ -17,13 +19,28 @@ from app.models.project import (
     Project,
     UploadedFile,
 )
-from app.services.document_analysis import classify_page, extract_fields, normalized_compare, normalize_field_value, candidate_quality
+from app.services.document_analysis import (
+    classify_page, extract_fields, extract_spatial_fields, normalized_compare,
+    normalize_field_value, candidate_quality, meaningful_text_score, rich_text_layer,
+)
 from app.services.storage import get_s3
 from app.core.config import settings
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger("pemb-worker")
 POLL_SECONDS = int(os.getenv("WORKER_POLL_SECONDS", "8"))
+
+
+
+def ocr_page_text(page: fitz.Page, dpi: int = 200) -> str:
+    """OCR a PDF page rendered to an image. Used for scans and low-signal drawings.
+
+    Tesseract is intentionally a fallback, not the primary spec-manual path. Rendering at
+    200 DPI keeps most drawing callouts legible without making worker memory excessive.
+    """
+    pix = page.get_pixmap(dpi=dpi, alpha=False)
+    image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    return (pytesseract.image_to_string(image, config="--psm 11") or "").strip()
 
 
 def event(db, job, stage: str, progress: int, message: str):
@@ -115,11 +132,35 @@ def process_job(job_id: str):
                             str(block[4]).strip() for block in sorted(blocks, key=lambda b: (round(b[1] / 18), b[0]))
                             if len(block) > 4 and str(block[4]).strip()
                         )
-                        is_searchable = len(text) >= 40
-                        needs_ocr = not is_searchable
+                        text_score = meaningful_text_score(text)
+                        is_searchable = rich_text_layer(text)
+                        initial_page_type, initial_division, initial_sheet, initial_title = classify_page(text)
+                        drawing_ocr_types = {
+                            "structural_notes", "roof_plan", "foundation_plan", "framing_plan",
+                            "floor_plan", "elevation", "wall_section", "door_schedule",
+                        }
+                        # Drawings get OCR assistance even when they contain embedded text because
+                        # the text layer often loses spatially separated callout/table values.
+                        low_signal = not is_searchable
+                        use_ocr_assist = low_signal or (initial_page_type in drawing_ocr_types)
                         searchable_pages += int(is_searchable)
-                        ocr_pages += int(needs_ocr)
-                        page_type, division, sheet_number, sheet_title = classify_page(text)
+                        ocr_pages += int(use_ocr_assist)
+
+                        # Never discard a low-signal page. OCR it and combine the result with
+                        # embedded text. For drawing sheets this acts as a second reading of the page.
+                        ocr_text = ""
+                        if use_ocr_assist:
+                            try:
+                                ocr_text = ocr_page_text(page, dpi=220)
+                            except Exception as ocr_exc:
+                                log.warning("OCR failed for %s page %s: %s", source.filename, index + 1, ocr_exc)
+                        analysis_text = text
+                        if ocr_text:
+                            analysis_text = (text + "\n--- OCR ASSIST ---\n" + ocr_text).strip()
+
+                        page_type, division, sheet_number, sheet_title = classify_page(analysis_text)
+                        if page_type == "unclassified" and initial_page_type != "unclassified":
+                            page_type, division, sheet_number, sheet_title = initial_page_type, initial_division, initial_sheet, initial_title
                         db.add(DocumentPage(
                             project_id=job.project_id,
                             uploaded_file_id=source.id,
@@ -129,19 +170,31 @@ def process_job(job_id: str):
                             page_type=page_type,
                             spec_division=division,
                             searchable_text=is_searchable,
-                            ocr_required=needs_ocr,
-                            text_length=len(text),
-                            text_excerpt=text[:4000] if text else None,
+                            ocr_required=low_signal,
+                            text_length=len(analysis_text),
+                            text_excerpt=analysis_text[:4000] if analysis_text else None,
                         ))
 
-                        if is_searchable:
-                            for candidate in extract_fields(text, page_type=page_type, division=division, blocks_text=blocks_text):
-                                candidate.update({
-                                    "source_file": source.filename,
-                                    "source_page": index + 1,
-                                    "source_sheet": sheet_number,
-                                })
-                                all_candidates.setdefault(candidate["field_name"], []).append(candidate)
+                        # Fast text/spec path plus coordinate-aware drawing path. OCR text is
+                        # routed through the same value validation pipeline instead of being skipped.
+                        page_candidates = extract_fields(
+                            analysis_text, page_type=page_type, division=division, blocks_text=blocks_text or analysis_text
+                        )
+                        page_candidates.extend(extract_spatial_fields(blocks, page_type=page_type, division=division))
+                        page_seen = set()
+                        for candidate in page_candidates:
+                            key = (candidate.get("field_name"), normalized_compare(candidate.get("value", ""), candidate.get("field_name")))
+                            if key in page_seen:
+                                continue
+                            page_seen.add(key)
+                            candidate.update({
+                                "source_file": source.filename,
+                                "source_page": index + 1,
+                                "source_sheet": sheet_number,
+                                "page_type": page_type,
+                                "division": division,
+                            })
+                            all_candidates.setdefault(candidate["field_name"], []).append(candidate)
 
                         current_page = index + 1
                         progress = 18 + int(((file_index + current_page / max(page_count, 1)) / max(len(files), 1)) * 62)
@@ -211,7 +264,7 @@ def process_job(job_id: str):
             job.completed_at = datetime.utcnow()
             job.message = (
                 f"Inspected {processed_files} PDF(s), {total_pages} page(s); "
-                f"{searchable_pages} searchable, {ocr_pages} need OCR; "
+                f"{searchable_pages} rich-text, {ocr_pages} OCR-assisted; "
                 f"{field_count} field(s), {conflict_count} conflict(s)"
             )
             project.status = "review_ready"
@@ -231,7 +284,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.8.1 Estimator Value Engine started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.9.0 Document Intelligence Engine started; poll interval=%ss", POLL_SECONDS)
     while True:
         job_id = claim_job()
         if job_id:

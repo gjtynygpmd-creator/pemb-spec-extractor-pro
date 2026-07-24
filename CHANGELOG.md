@@ -1,3 +1,15 @@
+## v1.9.0 - Document Intelligence Engine
+
+- Replaces the crude 40-character searchable-page threshold with a meaningful-text score.
+- Never skips low-signal PDF pages: they are rendered and OCR-assisted with Tesseract.
+- OCR-assists high-value drawing sheets even when an embedded text layer exists.
+- Adds coordinate-aware block extraction to pair design-criteria labels with nearby values.
+- Improves sheet classification for floor plans, roof plans, elevations, sections, schedules, and structural notes.
+- Constrains design-load regex windows so unrelated dimensions cannot become load values.
+- Prevents S1/Ss false positives from sheet numbers without seismic/spectral context.
+- Correctly normalizes fractional roof slopes such as 3/8:12 to 0.375:12.
+- Adds regression tests for unsafe wind matching, drawing classification, spatial extraction, and fractional roof slopes.
+
 ## v1.8.1 - Estimator Value Engine
 
 - Separates candidate discovery from estimator-ready values.

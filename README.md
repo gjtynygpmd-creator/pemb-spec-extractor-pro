@@ -1,4 +1,4 @@
-# PEMB Spec Extractor Pro v1.8.1 Estimator Value Engine
+# PEMB Spec Extractor Pro v1.9.0 Document Intelligence Engine
 
 ## Insulation Core Release
 

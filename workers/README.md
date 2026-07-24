@@ -1,11 +1,16 @@
-# Processing Worker
+# Processing Worker — v1.9.0
 
-The active worker now lives at `backend/app/worker.py` so the API and worker share the same models, configuration, and dependencies.
-
-Run locally from `backend/`:
+The production worker lives at `backend/app/worker.py` and is started by Render with:
 
 ```bash
 python -m app.worker
 ```
 
-Deploy on Render as a Background Worker using the same environment variables as the API.
+v1.9.0 adds a two-path document intelligence pipeline:
+
+- rich specification text uses the existing fast extraction/value engine;
+- drawing and low-signal pages are rendered and OCR-assisted with Tesseract;
+- native PDF text blocks retain coordinates for spatial label/value pairing;
+- every candidate is still validated and normalized by the PEMB estimator rules before persistence.
+
+This release requires no new API key. A paid document/vision service can be added later as a third path without replacing the estimator validation engine.
