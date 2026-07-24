@@ -1,7 +1,7 @@
-# Implement v1.9.0 — Document Intelligence Engine
+# Implement v1.9.1 — Document Intelligence Engine
 
 1. Replace the repository contents with this release.
-2. Commit: `feat: add v1.9.0 document intelligence engine`
+2. Commit: `feat: add v1.9.1 document intelligence engine`
 3. Push to `main`. Netlify and Render should auto-deploy.
 4. The Render Docker image now installs `tesseract-ocr`; the first build may take slightly longer.
 5. Re-run **Start Analysis** on existing projects. Reprocessing is required for the new routing/OCR/spatial logic.

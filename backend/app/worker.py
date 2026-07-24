@@ -29,18 +29,38 @@ from app.core.config import settings
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger("pemb-worker")
 POLL_SECONDS = int(os.getenv("WORKER_POLL_SECONDS", "8"))
+OCR_TIMEOUT_SECONDS = int(os.getenv("OCR_TIMEOUT_SECONDS", "35"))
+OCR_DPI = int(os.getenv("OCR_DPI", "140"))
+OCR_MAX_PIXELS = int(os.getenv("OCR_MAX_PIXELS", "12000000"))
+FORCE_DRAWING_OCR = os.getenv("FORCE_DRAWING_OCR", "false").lower() in {"1", "true", "yes"}
 
 
 
-def ocr_page_text(page: fitz.Page, dpi: int = 200) -> str:
-    """OCR a PDF page rendered to an image. Used for scans and low-signal drawings.
+def ocr_page_text(page: fitz.Page, dpi: int | None = None) -> str:
+    """OCR a low-signal PDF page with bounded CPU and memory use.
 
-    Tesseract is intentionally a fallback, not the primary spec-manual path. Rendering at
-    200 DPI keeps most drawing callouts legible without making worker memory excessive.
+    Large architectural sheets can become 25-40 MP images at 200+ DPI and can pin a
+    small Render worker for many minutes. v1.9.1 uses adaptive DPI, grayscale, a
+    pixel ceiling, and a hard Tesseract timeout so one sheet can never stall a job.
     """
-    pix = page.get_pixmap(dpi=dpi, alpha=False)
-    image = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-    return (pytesseract.image_to_string(image, config="--psm 11") or "").strip()
+    target_dpi = max(96, min(int(dpi or OCR_DPI), 180))
+    rect = page.rect
+    est_pixels = max(1.0, (rect.width / 72 * target_dpi) * (rect.height / 72 * target_dpi))
+    if est_pixels > OCR_MAX_PIXELS:
+        scale = (OCR_MAX_PIXELS / est_pixels) ** 0.5
+        target_dpi = max(96, int(target_dpi * scale))
+
+    pix = page.get_pixmap(dpi=target_dpi, colorspace=fitz.csGRAY, alpha=False)
+    image = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+    try:
+        return (pytesseract.image_to_string(
+            image, config="--oem 1 --psm 11", timeout=OCR_TIMEOUT_SECONDS
+        ) or "").strip()
+    except RuntimeError as exc:
+        # pytesseract raises RuntimeError on timeout. Treat OCR as optional and let
+        # native/spatial extraction continue rather than failing the whole project.
+        log.warning("OCR timed out after %ss: %s", OCR_TIMEOUT_SECONDS, exc)
+        return ""
 
 
 def event(db, job, stage: str, progress: int, message: str):
@@ -139,10 +159,12 @@ def process_job(job_id: str):
                             "structural_notes", "roof_plan", "foundation_plan", "framing_plan",
                             "floor_plan", "elevation", "wall_section", "door_schedule",
                         }
-                        # Drawings get OCR assistance even when they contain embedded text because
-                        # the text layer often loses spatially separated callout/table values.
+                        # OCR is now a bounded fallback, not an automatic second pass on every
+                        # drawing. Rich born-digital sheets already provide text blocks and
+                        # coordinates; OCRing 22x34 sheets on a small cloud CPU was the cause of
+                        # jobs appearing frozen at the first drawing page.
                         low_signal = not is_searchable
-                        use_ocr_assist = low_signal or (initial_page_type in drawing_ocr_types)
+                        use_ocr_assist = low_signal or (FORCE_DRAWING_OCR and initial_page_type in drawing_ocr_types)
                         searchable_pages += int(is_searchable)
                         ocr_pages += int(use_ocr_assist)
 
@@ -151,7 +173,7 @@ def process_job(job_id: str):
                         ocr_text = ""
                         if use_ocr_assist:
                             try:
-                                ocr_text = ocr_page_text(page, dpi=220)
+                                ocr_text = ocr_page_text(page)
                             except Exception as ocr_exc:
                                 log.warning("OCR failed for %s page %s: %s", source.filename, index + 1, ocr_exc)
                         analysis_text = text
@@ -284,7 +306,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.9.0 Document Intelligence Engine started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.9.1 Document Intelligence Engine started; poll interval=%ss", POLL_SECONDS)
     while True:
         job_id = claim_job()
         if job_id:

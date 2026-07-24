@@ -1,4 +1,4 @@
-## v1.9.0 - Document Intelligence Engine
+## v1.9.1 - Document Intelligence Engine
 
 - Replaces the crude 40-character searchable-page threshold with a meaningful-text score.
 - Never skips low-signal PDF pages: they are rendered and OCR-assisted with Tesseract.
@@ -52,3 +52,10 @@
 - Synchronized project address metadata with extracted Project Address values in PDF exports.
 - Updated PDF and application release identification to v1.7.0.
 - Added geometry and normalization regression tests.
+
+## v1.9.1 - OCR Stability Hotfix
+- Prevent large architectural sheets from pinning the worker during Tesseract OCR.
+- OCR only low-signal/image-only pages by default.
+- Add adaptive DPI, grayscale rendering, pixel cap, and per-page timeout.
+- Preserve coordinate-aware native extraction for rich drawing PDFs.
+- Fix nested field persistence call discovered during worker review.

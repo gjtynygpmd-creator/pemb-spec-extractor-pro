@@ -1,4 +1,4 @@
-# Processing Worker — v1.9.0
+# Processing Worker — v1.9.1
 
 The production worker lives at `backend/app/worker.py` and is started by Render with:
 
@@ -6,7 +6,7 @@ The production worker lives at `backend/app/worker.py` and is started by Render 
 python -m app.worker
 ```
 
-v1.9.0 adds a two-path document intelligence pipeline:
+v1.9.1 adds a two-path document intelligence pipeline:
 
 - rich specification text uses the existing fast extraction/value engine;
 - drawing and low-signal pages are rendered and OCR-assisted with Tesseract;
