@@ -1,0 +1,14 @@
+[
+  "tests/test_extraction_engine.py::test_accessory_scope_is_clean_value",
+  "tests/test_extraction_engine.py::test_detailed_roof_insulation_fields",
+  "tests/test_extraction_engine.py::test_detailed_wall_insulation_fields",
+  "tests/test_extraction_engine.py::test_excluded_accessory_is_normalized",
+  "tests/test_extraction_engine.py::test_geometry_field_test_release",
+  "tests/test_extraction_engine.py::test_normalizes_occupancy_group",
+  "tests/test_extraction_engine.py::test_panel_values_are_estimator_ready",
+  "tests/test_extraction_engine.py::test_rejects_definition_text_as_geometry",
+  "tests/test_extraction_engine.py::test_rejects_material_paragraph_as_accessory",
+  "tests/test_extraction_engine.py::test_semantic_normalization_avoids_false_conflicts",
+  "tests/test_extraction_engine.py::test_separate_sidewall_geometry",
+  "tests/test_extraction_engine.py::test_universal_design_load_table"
+]

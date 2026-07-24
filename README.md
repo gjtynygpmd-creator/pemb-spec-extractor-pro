@@ -1,16 +1,18 @@
-# PEMB Spec Extractor Pro v1.9.1 Document Intelligence Engine
+# PEMB Spec Extractor Pro v1.7.2 — Export Hotfix
 
-## Insulation Core Release
+## Fix
+The PDF generator referenced `mapping` while constructing project metadata before `mapping` had been initialized. This raised a Python `NameError` and caused the `/exports/projects/{project_id}/pdf` route to return HTTP 500.
 
-v1.6.1 retains Excel, full CSV, Zoho CSV, and PDF exports and improves the searchable-text extraction pipeline.
+The field map is now initialized before project rows are created.
 
-### Improvements
-- Searches every searchable PDF page, including `unclassified` pages.
-- Adds a validated label/value fallback for design-criteria tables.
-- Improves capture of building code, risk category, wind, snow, roof live load, collateral load, seismic design category, and site class.
-- Rejects common definition text that can look like a building dimension.
-- Retains targeted PEMB extraction for panels, insulation, framing, openings, finishes, gutters, downspouts, canopies, curbs, and vents.
-- Preserves manually entered estimator values when analysis is rerun.
-- Adds a worker version startup message so the deployed processing code can be verified independently of the API.
+## Deployment
+1. Replace the repository contents with this release.
+2. Commit and push to `main`.
+3. Confirm the Render web service auto-deploys commit.
+4. The worker does not require special configuration changes.
+5. Hard-refresh the Netlify application.
+6. Re-open the project and select PDF Export.
 
-No database migration is required. See `deployment/IMPLEMENT_V1.5.1.md`.
+Recommended commit:
+
+`fix: repair PDF export field mapping initialization`
