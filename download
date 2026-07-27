@@ -1,11 +1,8 @@
-# Processing Worker
+# pytest cache directory #
 
-The active worker now lives at `backend/app/worker.py` so the API and worker share the same models, configuration, and dependencies.
+This directory contains data from the pytest's cache plugin,
+which provides the `--lf` and `--ff` options, as well as the `cache` fixture.
 
-Run locally from `backend/`:
+**Do not** commit this to version control.
 
-```bash
-python -m app.worker
-```
-
-Deploy on Render as a Background Worker using the same environment variables as the API.
+See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more information.

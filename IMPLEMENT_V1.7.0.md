@@ -1,24 +1,36 @@
-# PEMB Spec Extractor Pro v1.5.0
+"""Regression test for v1.9.2 memory safety.
 
-## Purpose
-v1.5.0 upgrades the core PEMB extraction engine while retaining Excel, CSV, Zoho CSV, and PDF exports.
+Large-format sheets must not render to unbounded bitmaps (the cause of the
+worker being OOM-killed and the job hanging at 18%). Run from backend/:
+    DATABASE_URL=postgresql://unused python tests/test_render_bounds.py
+"""
 
-## Improvements
-- Expanded extraction from searchable specification and drawing pages.
-- Searches every searchable page, including pages classified as unclassified.
-- Adds core loads, codes, snow, seismic, panels, finishes, framing, openings, and accessories.
-- Adds page-type and specification-division confidence weighting.
-- Preserves manual estimator entries when analysis is rerun.
-- Improves conflict comparison by normalizing punctuation and spacing.
+import fitz
 
-## Deployment
-1. Copy the package contents to the root of the existing GitHub repository.
-2. Commit to `main` with `v1.5.0 core PEMB extraction`.
-3. Allow Netlify, the Render API, and the Render worker to redeploy.
-4. No database migration or new environment variable is required.
-5. Reopen the benchmark project and click **Start Analysis** again.
+from app.core.config import settings
+from app.services.vision_extraction import render_page_png
 
-## Verification
-- API health/version should report `1.5.0`.
-- The completed job message should report a nonzero field count on text-searchable PEMB specifications containing design criteria.
-- Review extracted fields before exporting.
+
+def _edge_for(width_in, height_in):
+    doc = fitz.open()
+    page = doc.new_page(width=width_in * 72, height=height_in * 72)
+    png = render_page_png(page, dpi=settings.vision_dpi)
+    pix = fitz.Pixmap(png)
+    return max(pix.width, pix.height)
+
+
+def test_large_sheet_is_bounded():
+    # ARCH-D (34x22 in) and ARCH-E (48x36 in) must both respect the edge cap.
+    assert _edge_for(34, 22) <= settings.vision_max_edge_px
+    assert _edge_for(48, 36) <= settings.vision_max_edge_px
+
+
+def test_small_page_not_upscaled_past_cap():
+    # A letter-size page at target DPI stays well under the cap.
+    assert _edge_for(8.5, 11) <= settings.vision_max_edge_px
+
+
+if __name__ == "__main__":
+    test_large_sheet_is_bounded()
+    test_small_page_not_upscaled_past_cap()
+    print("All v1.9.2 render-bound tests passed.")

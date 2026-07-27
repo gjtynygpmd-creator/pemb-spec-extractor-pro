@@ -1,46 +1,66 @@
-# Large-file processing architecture
+# Implement v1.9.0 - Vision Extraction Engine
 
-1. **Netlify frontend**
-   - Selects multiple files.
-   - Splits each file into 16 MB parts.
-   - Requests signed upload URLs from the API.
-   - Uploads each part directly to S3-compatible storage.
-   - Starts a processing job after all uploads complete.
+This release adds a vision-based extraction path so drawings and scanned pages are
+actually read, instead of being silently skipped. The regex engine is retained as a
+fast path for born-digital spec manuals.
 
-2. **FastAPI control service**
-   - Creates projects and multipart upload sessions.
-   - Generates signed part URLs.
-   - Completes multipart uploads.
-   - Starts and reports extraction jobs.
-   - Does not proxy the file bytes, keeping API memory and timeout usage low.
+## What changed
 
-3. **Object storage**
-   - Cloudflare R2, AWS S3, Backblaze B2 S3, or equivalent.
-   - Source files under `projects/<project_id>/source/`.
-   - Rendered page images, OCR JSON, extracted records, and exports in separate prefixes.
+- New service: `backend/app/services/vision_extraction.py`
+- Worker routing rewritten in `backend/app/worker.py`
+- Same-line label/value binding and unit-required validation in
+  `backend/app/services/document_analysis.py` (fixes the "24 mph" misread)
+- New config in `backend/app/core/config.py`
+- New dependency `anthropic` in `backend/requirements.txt`
+- New env vars in `backend/render.yaml` (worker service)
+- New local debug tool `backend/tools/local_extract.py`
 
-4. **Processing workers**
-   - Download or stream each file from object storage.
-   - Inspect each PDF page's embedded text.
-   - Route each page (implemented in v1.9.0):
-     - Rich, label-dense text layer -> fast regex extraction (spec manuals, structural notes).
-     - Otherwise -> vision extraction: the page is rendered to an image and read by
-       Claude, which returns the PEMB schema as JSON (drawings, scanned, image-only).
-     - Vision unavailable or empty -> page flagged for OCR/manual review, never dropped.
-   - Classify sheets by title block and content.
-   - Normalize extracted values to the PEMB schema through shared cleaners so both
-     paths populate the same dashboard fields.
-   - Store page, sheet, excerpt, confidence, and extraction method for each value.
-   - Generate Excel, Zoho CSV, conflict report, and estimator summary.
+## Required deployment steps
 
-   Still on the roadmap: safe ZIP expansion, tiled rendering for very large sheets,
-   and bounding-box capture for on-sheet highlighting.
+1. Set the worker's `ANTHROPIC_API_KEY` environment variable on Render (marked
+   `sync: false`, so set it in the dashboard or as a secret). The API service does not
+   need it; only the worker performs extraction.
 
-5. **Production requirements**
-   - Persistent database instead of the in-memory prototype store.
-   - Queue service and separate workers.
-   - Authentication.
-   - Virus scanning.
-   - ZIP-bomb and path-traversal protection.
-   - Automatic file retention/deletion policy.
-   - Upload retry and resume state.
+2. Confirm these worker env vars (defaults shown; all optional except the key):
+   - `VISION_EXTRACTION_ENABLED=true`
+   - `VISION_MODEL=claude-opus-4-8`
+   - `VISION_DPI=200`
+   - `TEXT_LAYER_MIN_CHARS=200`
+   - `TEXT_LAYER_MIN_LABELS=3`
+
+3. Redeploy. The worker log line on start will read
+   `PEMB processing worker v1.9.0 Vision Extraction Engine started`.
+
+## Behavior without an API key
+
+If `ANTHROPIC_API_KEY` is unset (or `VISION_EXTRACTION_ENABLED=false`), the job still
+runs. Spec pages with a text layer extract normally; drawings and scanned pages are
+flagged for OCR/manual review rather than dropped, and the job completes without error.
+
+## Local testing without cloud infrastructure
+
+From `backend/`, with dependencies installed:
+
+```
+# Offline routing check (drawings will show as needs_ocr without a key)
+DATABASE_URL=postgresql://unused python -m tools.local_extract /path/to/file.pdf
+
+# Simulate the vision path offline to verify routing and merge
+DATABASE_URL=postgresql://unused python -m tools.local_extract /path/to/file.pdf --mock-vision
+
+# Exercise the real vision path
+ANTHROPIC_API_KEY=sk-... DATABASE_URL=postgresql://unused \
+  python -m tools.local_extract /path/to/file.pdf
+```
+
+The tool prints, per page: detected type, text length, diagnostic label count, the
+routing decision (text / vision / needs_ocr), and every field found.
+
+## Cost and tuning notes
+
+- Vision runs only on pages that fail the text-layer test, so clean spec manuals incur
+  no model cost. A drawing-heavy set will call the model once per drawing page.
+- Raise `TEXT_LAYER_MIN_LABELS` to send more borderline pages to vision (higher recall,
+  higher cost); lower it to prefer the regex path.
+- `VISION_DPI` trades legibility of small callout text against image size; 200 is a good
+  default, 150 is cheaper, 300 helps on dense sheets.

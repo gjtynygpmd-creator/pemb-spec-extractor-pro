@@ -1,0 +1,79 @@
+services:
+  - type: web
+    name: pemb-spec-extractor-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        value: pemb-project-files
+      - key: S3_REGION
+        value: auto
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: worker
+    name: pemb-spec-extractor-worker
+    runtime: docker
+    # 'starter' (512 MB) is prone to OOM on large multi-page drawing sets, which was
+    # the cause of jobs hanging mid-analysis. 'standard' (2 GB) is recommended when
+    # processing full drawing sets, especially with vision enabled. Revert to starter
+    # to cut cost if you only handle small text-based specs.
+    plan: standard
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m app.worker
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        value: pemb-project-files
+      - key: S3_REGION
+        value: auto
+      - key: WORKER_POLL_SECONDS
+        value: 8
+      # v1.9.x vision extraction (drawings + scanned pages), provider-agnostic
+      - key: VISION_PROVIDER
+        value: openai
+      - key: VISION_EXTRACTION_ENABLED
+        value: "true"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: VISION_MODEL_OPENAI
+        value: gpt-4o
+      # Only needed if VISION_PROVIDER is switched to "anthropic"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: VISION_MODEL_ANTHROPIC
+        value: claude-opus-4-8
+      - key: VISION_DPI
+        value: "200"
+      - key: TEXT_LAYER_MIN_CHARS
+        value: "200"
+      - key: TEXT_LAYER_MIN_LABELS
+        value: "3"
+      # v1.9.2 stability / memory safety
+      - key: VISION_MAX_EDGE_PX
+        value: "2200"
+      - key: VISION_MAX_PAGES_PER_JOB
+        value: "300"
+      - key: PAGE_TEXT_CHAR_CAP
+        value: "100000"
+      - key: WORKER_STALE_SECONDS
+        value: "600"
+      - key: WORKER_MAX_ATTEMPTS
+        value: "3"

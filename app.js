@@ -1,20 +1,11 @@
-# v1.6 Estimator Core Benchmark
+# Implement v1.7.0 Field Test Release
 
-Benchmark project: Marshall University Bill Noe Flight School — combined specification manual and 65-sheet drawing set.
+1. Replace the repository contents with this package while preserving your environment variables.
+2. Commit and push to the GitHub branch connected to Netlify and Render.
+3. Recommended commit: `feat: release v1.7.0 geometry field test`
+4. Confirm the Render API and worker both redeploy successfully.
+5. Open the Netlify application and verify the `v1.7.0 Field Test` badge.
+6. Create a fresh project for the live bid, upload drawings/specifications, and run analysis.
+7. Export Excel and PDF after reviewing the extracted values.
 
-Verified automatically located during local regression run:
-
-- Project address
-- 2018 IBC
-- Occupancy S-1
-- Risk Category II
-- Ground snow load 30 psf
-- Roof snow load 24 psf
-- Site Class B
-- Seismic Design Category A
-- Ss 0.154
-- S1 0.064
-- Eave height candidate
-- Wall panel candidate
-
-The release intentionally suppresses non-core narrative matches such as generic galvanized-steel paragraphs previously misidentified as gutters, downspouts, and roof curbs. Missing fields remain visible for estimator entry instead of being populated with weak text.
+No database migration is required for this release. Existing projects remain available, but re-run analysis to use the new extraction logic.

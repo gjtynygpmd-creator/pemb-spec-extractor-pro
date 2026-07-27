@@ -1,30 +1,22 @@
+# v1.1 Functional MVP
 
-const API_BASE=(window.PEMB_API_BASE||localStorage.getItem('pembApiBase')||'https://pemb-spec-extractor-pro.onrender.com').replace(/\/$/,'');
-const $=id=>document.getElementById(id);
-async function api(path,options={}){
- const r=await fetch(API_BASE+path,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
- if(!r.ok)throw new Error(await r.text());return r.json()
-}
-function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-function card(p){
- return `<article class="project-card" onclick="location.href='project.html?id=${encodeURIComponent(p.id)}'">
- <div class="project-card-head"><div><h3>${escapeHtml(p.name)}</h3><p>${escapeHtml(p.customer||'No customer entered')}</p></div><span class="badge">${escapeHtml(p.status)}</span></div>
- <div class="project-stats"><span><b>${p.file_count}</b> Files</span><span><b>${p.field_count}</b> Fields</span><span><b>${p.conflict_count}</b> Conflicts</span></div>
- <div class="project-meta">${escapeHtml(p.address||'No address')}${p.bid_due?` • Bid due ${new Date(p.bid_due).toLocaleString()}`:''}</div></article>`
-}
-async function load(){
- try{const d=await api('/projects');$('projectGrid').innerHTML=d.projects.length?d.projects.map(card).join(''):'<div class="muted">No projects yet.</div>'}
- catch(e){$('dashboardMessage').textContent='Could not load projects: '+e.message;$('dashboardMessage').className='analysis-status error'}
-}
-$('newProjectBtn').onclick=()=>$('projectForm').classList.remove('hidden');
-$('cancelProject').onclick=()=>$('projectForm').classList.add('hidden');
-$('saveProject').onclick=async()=>{
- try{
-   const p=await api('/projects',{method:'POST',body:JSON.stringify({
-     name:$('name').value,customer:$('customer').value||null,address:$('address').value||null,
-     bid_due:$('bidDue').value?new Date($('bidDue').value).toISOString():null
-   })});
-   location.href=`project.html?id=${encodeURIComponent(p.id)}`
- }catch(e){$('dashboardMessage').textContent='Create failed: '+e.message;$('dashboardMessage').className='analysis-status error'}
-};
-load();
+## Testable workflow
+1. Create a persistent project.
+2. Open the project workspace.
+3. Select multiple source documents.
+4. Upload each file to Cloudflare R2 through multipart signed URLs.
+5. Save uploaded-file records in Neon PostgreSQL.
+6. Refresh/reopen the project and confirm the file list persists.
+7. Start a persistent processing job.
+8. Confirm the queued job remains visible after refresh.
+
+## Not included yet
+The processing job is stored but not consumed by a worker. OCR, drawing vision, extracted fields, and Excel export are the next milestone.
+
+## Important Cloudflare R2 configuration
+The R2 bucket needs a browser CORS policy allowing your Netlify origin to:
+- PUT
+- GET
+- HEAD
+
+and exposing the `ETag` response header.
