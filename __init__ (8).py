@@ -1,99 +1,71 @@
-
-import uuid
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.core.config import settings
+
 from app.db.session import get_db
-from app.models.project import Project, UploadedFile
-from app.schemas.upload import UploadInit, UploadPartUrl, UploadComplete
-from app.services.storage import get_s3
+from app.models.project import Project, ExtractedField
+from app.schemas.field import FieldUpdate, FieldCreate
 
-router = APIRouter(prefix="/uploads", tags=["uploads"])
+router = APIRouter(prefix="/fields", tags=["fields"])
 
-@router.post("/init")
-def init_upload(payload: UploadInit, db: Session = Depends(get_db)):
-    project = db.get(Project, payload.project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
 
-    max_bytes = settings.max_file_size_gb * 1024**3
-    if payload.size > max_bytes:
-        raise HTTPException(413, f"File exceeds configured {settings.max_file_size_gb} GB limit")
-
-    safe_name = payload.filename.replace("/", "_").replace("\\", "_")
-    object_key = f"projects/{project.id}/source/{uuid.uuid4()}-{safe_name}"
-    result = get_s3().create_multipart_upload(
-        Bucket=settings.s3_bucket,
-        Key=object_key,
-        ContentType=payload.content_type,
-        Metadata={
-            "project-id": project.id,
-            "original-filename": safe_name,
-        },
-    )
+def serialize(field: ExtractedField):
     return {
-        "upload_id": result["UploadId"],
-        "object_key": object_key,
-        "part_size": payload.part_size,
+        "id": field.id,
+        "project_id": field.project_id,
+        "category": field.category,
+        "field_name": field.field_name,
+        "value": field.value,
+        "normalized_value": field.normalized_value,
+        "confidence": field.confidence,
+        "status": field.status,
+        "source_file": field.source_file,
+        "source_page": field.source_page,
+        "source_sheet": field.source_sheet,
+        "source_excerpt": field.source_excerpt,
+        "created_at": field.created_at,
     }
 
-@router.post("/part-url")
-def create_part_url(payload: UploadPartUrl):
-    url = get_s3().generate_presigned_url(
-        "upload_part",
-        Params={
-            "Bucket": settings.s3_bucket,
-            "Key": payload.object_key,
-            "UploadId": payload.upload_id,
-            "PartNumber": payload.part_number,
-        },
-        ExpiresIn=settings.upload_expiration_seconds,
-    )
-    return {"url": url, "headers": {}}
 
-@router.post("/complete")
-def complete_upload(payload: UploadComplete, db: Session = Depends(get_db)):
-    project = db.get(Project, payload.project_id)
-    if not project:
+@router.patch("/{field_id}")
+def update_field(field_id: str, payload: FieldUpdate, db: Session = Depends(get_db)):
+    field = db.get(ExtractedField, field_id)
+    if not field:
+        raise HTTPException(404, "Extracted field not found")
+    changes = payload.model_dump(exclude_unset=True)
+    for key, value in changes.items():
+        setattr(field, key, value)
+    db.commit()
+    db.refresh(field)
+    return serialize(field)
+
+
+@router.post("/projects/{project_id}")
+def create_manual_field(project_id: str, payload: FieldCreate, db: Session = Depends(get_db)):
+    if not db.get(Project, project_id):
         raise HTTPException(404, "Project not found")
-
-    completed_parts = [
-        {"PartNumber": int(p["part_number"]), "ETag": p["etag"]}
-        for p in payload.parts
-    ]
-    get_s3().complete_multipart_upload(
-        Bucket=settings.s3_bucket,
-        Key=payload.object_key,
-        UploadId=payload.upload_id,
-        MultipartUpload={"Parts": completed_parts},
-    )
-
-    existing = db.query(UploadedFile).filter(
-        UploadedFile.object_key == payload.object_key
-    ).first()
-    if not existing:
-        uploaded = UploadedFile(
-            project_id=payload.project_id,
-            filename=payload.filename,
-            object_key=payload.object_key,
-            content_type=payload.content_type,
-            size_bytes=payload.size,
-            status="uploaded",
+    existing = db.scalars(
+        select(ExtractedField).where(
+            ExtractedField.project_id == project_id,
+            ExtractedField.field_name == payload.field_name,
         )
-        db.add(uploaded)
-        project.status = "files_uploaded"
+    ).first()
+    if existing:
+        existing.value = payload.value
+        existing.status = payload.status
         db.commit()
-        db.refresh(uploaded)
-        return {
-            "id": uploaded.id,
-            "status": uploaded.status,
-            "filename": uploaded.filename,
-            "object_key": uploaded.object_key,
-        }
-
-    return {
-        "id": existing.id,
-        "status": existing.status,
-        "filename": existing.filename,
-        "object_key": existing.object_key,
-    }
+        db.refresh(existing)
+        return serialize(existing)
+    field = ExtractedField(
+        project_id=project_id,
+        category=payload.category,
+        field_name=payload.field_name,
+        value=payload.value,
+        confidence=1.0,
+        status=payload.status,
+        source_file="Manual entry",
+    )
+    db.add(field)
+    db.commit()
+    db.refresh(field)
+    return serialize(field)

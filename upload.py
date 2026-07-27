@@ -23,18 +23,10 @@ import logging
 from dataclasses import dataclass, field
 
 from app.core.config import settings
-from app.services.document_analysis import (
-    CORE_ESTIMATOR_FIELDS,
-    clean_estimator_value,
-    normalize_field_value,
-    normalize_space,
-)
+from app.services import schema_loader
+from app.services.document_analysis import normalize_field_value, normalize_space
 
 log = logging.getLogger("pemb-worker.vision")
-
-# Field names presented to the model. Kept in sync with the regex engine's
-# CORE_ESTIMATOR_FIELDS so both paths populate the same dashboard schema.
-_VISION_FIELDS = sorted(CORE_ESTIMATOR_FIELDS)
 
 _SYSTEM_PROMPT = (
     "You read a single sheet from a pre-engineered metal building (PEMB) "
@@ -43,22 +35,10 @@ _SYSTEM_PROMPT = (
     "the sheet, you omit that field rather than inferring it."
 )
 
-_USER_INSTRUCTIONS = (
-    "Extract the PEMB estimating fields from this sheet.\n\n"
-    "Return ONLY a JSON object with a single key \"fields\" whose value is a "
-    "list of objects. Each object has:\n"
-    "  - field_name: one of the exact names in the allowed list below\n"
-    "  - value: the value exactly as shown on the sheet (keep units)\n"
-    "  - confidence: a number from 0 to 1\n"
-    "  - source_note: a short phrase describing where on the sheet it was found\n\n"
-    "Rules:\n"
-    "  - Use ONLY field names from the allowed list. Skip anything else.\n"
-    "  - Omit a field entirely if it is not present. Do not output nulls.\n"
-    "  - Read schedules, load tables, title blocks, and dimension callouts.\n"
-    "  - Do not confuse a dimension (for example an eave height like 24'-0\") "
-    "with a load or wind speed value.\n\n"
-    "Allowed field_name values:\n" + "\n".join(f"  - {name}" for name in _VISION_FIELDS)
-)
+
+def _user_instructions() -> str:
+    # Built from the canonical schema so the prompt always matches the field dictionary.
+    return schema_loader.build_vision_instructions()
 
 
 @dataclass
@@ -168,19 +148,25 @@ def _parse_model_json(raw: str) -> list[dict]:
 
 
 def _normalize_candidates(items: list[dict]) -> list[dict]:
-    """Validate model output through the same cleaners the regex path uses."""
+    """Validate model output against the canonical schema.
+
+    Accepts either a field_id (preferred, what the prompt asks for) or a display
+    name, resolves it to the canonical field, coerces enum values to an allowed
+    option, and drops anything not in the schema.
+    """
     out: list[dict] = []
     for item in items:
         if not isinstance(item, dict):
             continue
-        name = normalize_space(str(item.get("field_name", "")))
-        if name not in CORE_ESTIMATOR_FIELDS:
+        key = normalize_space(str(item.get("field_id") or item.get("field_name") or ""))
+        field_def = schema_loader.resolve(key)
+        if not field_def:
             continue
         raw_value = normalize_space(str(item.get("value", "")))
         if not raw_value:
             continue
         note = normalize_space(str(item.get("source_note", "")))
-        cleaned = clean_estimator_value(name, raw_value, note)
+        cleaned = schema_loader.coerce_value(field_def.field_id, raw_value)
         if not cleaned:
             continue
         try:
@@ -188,47 +174,22 @@ def _normalize_candidates(items: list[dict]) -> list[dict]:
         except (TypeError, ValueError):
             confidence = 0.8
         confidence = max(0.4, min(0.98, confidence))
+        try:
+            normalized = normalize_field_value(field_def.name, cleaned)
+        except Exception:
+            normalized = cleaned
         out.append(
             {
-                "category": _category_for(name),
-                "field_name": name,
+                "category": field_def.category,
+                "field_name": field_def.name,
                 "value": cleaned,
-                "normalized_value": normalize_field_value(name, cleaned),
+                "normalized_value": normalized,
                 "confidence": confidence,
                 "source_excerpt": note or "Read from rendered page by vision model",
                 "match_method": "vision",
             }
         )
     return out
-
-
-_CATEGORY_BY_FIELD = {
-    "Project Address": "Project", "Bid Due": "Project", "Total Square Feet": "Geometry",
-    "Building Width": "Geometry", "Building Length": "Geometry", "Eave Height": "Geometry",
-    "BSW Eave Height": "Geometry", "FSW Eave Height": "Geometry", "Frame Type": "Geometry",
-    "Building Orientation": "Geometry", "Ridge Offset": "Geometry", "Roof Slope": "Geometry",
-    "Front Roof Slope": "Geometry", "Back Roof Slope": "Geometry",
-    "Building Code": "Codes & Loads", "Risk Category": "Codes & Loads", "Occupancy": "Codes & Loads",
-    "Basic Wind Speed": "Codes & Loads", "Wind Exposure": "Codes & Loads",
-    "Ground Snow Load": "Codes & Loads", "Roof Snow Load": "Codes & Loads",
-    "Roof Live Load": "Codes & Loads", "Dead Load": "Codes & Loads", "Collateral Load": "Codes & Loads",
-    "Seismic Design Category": "Codes & Loads", "Site Class": "Codes & Loads",
-    "Ss": "Codes & Loads", "S1": "Codes & Loads", "Snow Exposure Factor": "Codes & Loads",
-    "Thermal Factor": "Codes & Loads",
-    "Roof Panel Type": "Envelope", "Roof Panel Gauge": "Envelope", "Wall Panel Type": "Envelope",
-    "Wall Panel Gauge": "Envelope", "Roof Insulation": "Envelope", "Wall Insulation": "Envelope",
-    "Roof Insulation Type": "Insulation", "Roof Insulation R-Value": "Insulation",
-    "Roof Insulation Thickness": "Insulation", "Roof Insulation Facing": "Insulation",
-    "Wall Insulation Type": "Insulation", "Wall Insulation R-Value": "Insulation",
-    "Wall Insulation Thickness": "Insulation", "Wall Insulation Facing": "Insulation",
-    "Gutters": "Accessories", "Downspouts": "Accessories", "Ridge Vents": "Accessories",
-    "Roof Curbs": "Accessories", "Framed Openings": "Openings", "Overhead Doors": "Openings",
-    "Personnel Doors": "Openings", "Louvers": "Openings",
-}
-
-
-def _category_for(field_name: str) -> str:
-    return _CATEGORY_BY_FIELD.get(field_name, "Other")
 
 
 # ---------------------------------------------------------------------------
@@ -241,14 +202,14 @@ def _call_openai(b64_png: str) -> str:
     client = OpenAI(api_key=settings.openai_api_key)
     resp = client.chat.completions.create(
         model=settings.vision_model_openai,
-        max_tokens=2000,
+        max_tokens=3000,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": _USER_INSTRUCTIONS},
+                    {"type": "text", "text": _user_instructions()},
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:image/png;base64,{b64_png}"},
@@ -266,7 +227,7 @@ def _call_anthropic(b64_png: str) -> str:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     message = client.messages.create(
         model=settings.vision_model_anthropic,
-        max_tokens=2000,
+        max_tokens=3000,
         system=_SYSTEM_PROMPT,
         messages=[
             {
@@ -280,7 +241,7 @@ def _call_anthropic(b64_png: str) -> str:
                             "data": b64_png,
                         },
                     },
-                    {"type": "text", "text": _USER_INSTRUCTIONS},
+                    {"type": "text", "text": _user_instructions()},
                 ],
             }
         ],

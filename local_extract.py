@@ -1,120 +1,1941 @@
-import uuid
-from datetime import datetime
-from sqlalchemy import String, DateTime, Text, ForeignKey, Integer, Float, Boolean
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.session import Base
-
-
-def uuid_str() -> str:
-    return str(uuid.uuid4())
-
-
-class Project(Base):
-    __tablename__ = "projects"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    customer: Mapped[str | None] = mapped_column(String(255))
-    address: Mapped[str | None] = mapped_column(Text)
-    bid_due: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    status: Mapped[str] = mapped_column(String(40), default="draft", nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    files: Mapped[list["UploadedFile"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-    jobs: Mapped[list["ProcessingJob"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-    fields: Mapped[list["ExtractedField"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-    pages: Mapped[list["DocumentPage"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-    events: Mapped[list["ProcessingEvent"]] = relationship(back_populates="project", cascade="all, delete-orphan")
-
-
-class UploadedFile(Base):
-    __tablename__ = "uploaded_files"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
-    filename: Mapped[str] = mapped_column(String(500), nullable=False)
-    object_key: Mapped[str] = mapped_column(String(1000), nullable=False, unique=True)
-    content_type: Mapped[str | None] = mapped_column(String(255))
-    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
-    status: Mapped[str] = mapped_column(String(40), default="uploaded")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-
-    project: Mapped["Project"] = relationship(back_populates="files")
-    pages: Mapped[list["DocumentPage"]] = relationship(back_populates="uploaded_file", cascade="all, delete-orphan")
-
-
-class ProcessingJob(Base):
-    __tablename__ = "processing_jobs"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
-    status: Mapped[str] = mapped_column(String(40), default="queued", index=True)
-    progress: Mapped[int] = mapped_column(Integer, default=0)
-    stage: Mapped[str | None] = mapped_column(String(80))
-    message: Mapped[str | None] = mapped_column(Text)
-    error_message: Mapped[str | None] = mapped_column(Text)
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    project: Mapped["Project"] = relationship(back_populates="jobs")
-    events: Mapped[list["ProcessingEvent"]] = relationship(back_populates="job", cascade="all, delete-orphan")
-
-
-class DocumentPage(Base):
-    __tablename__ = "document_pages"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
-    uploaded_file_id: Mapped[str] = mapped_column(ForeignKey("uploaded_files.id", ondelete="CASCADE"), index=True)
-    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    sheet_number: Mapped[str | None] = mapped_column(String(80))
-    sheet_title: Mapped[str | None] = mapped_column(String(255))
-    page_type: Mapped[str] = mapped_column(String(80), default="unclassified")
-    spec_division: Mapped[str | None] = mapped_column(String(20))
-    searchable_text: Mapped[bool] = mapped_column(Boolean, default=False)
-    ocr_required: Mapped[bool] = mapped_column(Boolean, default=False)
-    text_length: Mapped[int] = mapped_column(Integer, default=0)
-    text_excerpt: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-
-    project: Mapped["Project"] = relationship(back_populates="pages")
-    uploaded_file: Mapped["UploadedFile"] = relationship(back_populates="pages")
-
-
-class ExtractedField(Base):
-    __tablename__ = "extracted_fields"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
-    category: Mapped[str] = mapped_column(String(120), nullable=False)
-    field_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    value: Mapped[str | None] = mapped_column(Text)
-    normalized_value: Mapped[str | None] = mapped_column(Text)
-    confidence: Mapped[float | None] = mapped_column(Float)
-    status: Mapped[str] = mapped_column(String(40), default="review")
-    source_file: Mapped[str | None] = mapped_column(String(500))
-    source_page: Mapped[int | None] = mapped_column(Integer)
-    source_sheet: Mapped[str | None] = mapped_column(String(80))
-    source_excerpt: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-
-    project: Mapped["Project"] = relationship(back_populates="fields")
-
-
-class ProcessingEvent(Base):
-    __tablename__ = "processing_events"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
-    job_id: Mapped[str] = mapped_column(ForeignKey("processing_jobs.id", ondelete="CASCADE"), index=True)
-    stage: Mapped[str] = mapped_column(String(80), nullable=False)
-    progress: Mapped[int] = mapped_column(Integer, default=0)
-    message: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
-
-    project: Mapped["Project"] = relationship(back_populates="events")
-    job: Mapped["ProcessingJob"] = relationship(back_populates="events")
+{
+  "schema": "pemb_extraction_fields",
+  "version": "1.0",
+  "categories": {
+    "Project & Bid Info": [
+      "bid_due",
+      "customer",
+      "project_name",
+      "project_address",
+      "quote_number",
+      "engineer_of_record",
+      "building_use",
+      "jurisdiction_ahj"
+    ],
+    "Building Geometry": [
+      "building_width",
+      "building_length",
+      "total_square_feet",
+      "frame_type",
+      "number_of_bays",
+      "bay_spacing",
+      "endwall_type",
+      "bsw_ridge_offset",
+      "bsw_eave_height",
+      "fsw_eave_height",
+      "ridge_height",
+      "roof_overhangs",
+      "parapet",
+      "canopies_leantos",
+      "mezzanine",
+      "crane_system"
+    ],
+    "Roof System": [
+      "roof_panel_type",
+      "roof_panel_gauge",
+      "roof_panel_finish",
+      "roof_slope_front",
+      "roof_slope_back"
+    ],
+    "Wall System": [
+      "wall_panel_type",
+      "wall_panel_gauge",
+      "wall_panel_finish",
+      "wainscot",
+      "liner_panel",
+      "base_condition"
+    ],
+    "Insulation": [
+      "roof_insulation",
+      "roof_insulation_r_value",
+      "roof_insulation_type",
+      "roof_insulation_thickness",
+      "roof_insulation_facing",
+      "wall_insulation",
+      "wall_insulation_r_value",
+      "wall_insulation_type",
+      "wall_insulation_thickness",
+      "wall_insulation_facing"
+    ],
+    "Design Criteria - Codes": [
+      "building_code_ibc",
+      "asce7_edition",
+      "risk_category",
+      "enclosure_class"
+    ],
+    "Design Criteria - Loads": [
+      "roof_live_load",
+      "dead_load",
+      "collateral_load",
+      "ground_snow_load",
+      "roof_snow_load",
+      "snow_ce",
+      "snow_ct",
+      "snow_is",
+      "unbalanced_snow"
+    ],
+    "Design Criteria - Wind": [
+      "basic_wind_speed",
+      "wind_exposure",
+      "wind_gcpi",
+      "wind_borne_debris"
+    ],
+    "Design Criteria - Seismic": [
+      "seismic_site_class",
+      "seismic_sdc",
+      "seismic_ss",
+      "seismic_s1",
+      "seismic_sds",
+      "seismic_sd1",
+      "seismic_ie",
+      "seismic_sfrs"
+    ],
+    "Serviceability": [
+      "defl_roof_live",
+      "defl_wall",
+      "drift_frame"
+    ],
+    "Openings & Accessories": [
+      "overhead_doors",
+      "personnel_doors",
+      "windows",
+      "framed_openings",
+      "louvers",
+      "gutters_downspouts",
+      "ventilation",
+      "skylights",
+      "roof_curbs",
+      "trim_package"
+    ],
+    "Foundation Interface": [
+      "anchor_bolts_by",
+      "column_reactions",
+      "foundation_by"
+    ],
+    "Commercial / Scope": [
+      "erection_by",
+      "freight",
+      "paint_warranty",
+      "lead_time"
+    ]
+  },
+  "fields": [
+    {
+      "field_id": "bid_due",
+      "name": "Bid Due",
+      "category": "Project & Bid Info",
+      "type": "date",
+      "unit": null,
+      "allowed_values": null,
+      "format": "MM/DD/YYYY",
+      "example": "08/15/2026",
+      "aliases": [
+        "bid date",
+        "due date",
+        "proposal due"
+      ],
+      "typical_source": "Bid invitation, cover sheet",
+      "origin": "Template",
+      "required": true,
+      "notes": "Administrative; usually not on drawings. Take from bid request if absent."
+    },
+    {
+      "field_id": "customer",
+      "name": "Customer",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "free text",
+      "example": "ABC Construction",
+      "aliases": [
+        "client",
+        "owner",
+        "GC",
+        "buyer"
+      ],
+      "typical_source": "Cover sheet, title block",
+      "origin": "Template",
+      "required": true,
+      "notes": "The party requesting the building."
+    },
+    {
+      "field_id": "project_name",
+      "name": "Project",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "free text",
+      "example": "Cedar Valley Warehouse",
+      "aliases": [
+        "project",
+        "job name"
+      ],
+      "typical_source": "Title block, cover sheet",
+      "origin": "Template",
+      "required": true,
+      "notes": null
+    },
+    {
+      "field_id": "project_address",
+      "name": "Project Address",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "street, city, state, ZIP",
+      "example": "1450 Industrial Pkwy, Ogden, UT 84404",
+      "aliases": [
+        "site address",
+        "project location",
+        "jobsite"
+      ],
+      "typical_source": "Title block, cover sheet, civil sheets",
+      "origin": "Template",
+      "required": true,
+      "notes": "Drives code/climate lookups; capture city+state at minimum."
+    },
+    {
+      "field_id": "quote_number",
+      "name": "Quote / Bid Number",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "free text",
+      "example": "Q-2026-0412",
+      "aliases": [
+        "quote no",
+        "bid no",
+        "proposal no"
+      ],
+      "typical_source": "Bid request",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Useful key for tracking; rarely on drawings."
+    },
+    {
+      "field_id": "engineer_of_record",
+      "name": "Engineer of Record",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name / firm",
+      "example": "Smith Structural PE",
+      "aliases": [
+        "EOR",
+        "structural engineer",
+        "PE stamp"
+      ],
+      "typical_source": "Title block, stamp",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Identifies who owns design criteria."
+    },
+    {
+      "field_id": "building_use",
+      "name": "Building Use / Occupancy",
+      "category": "Project & Bid Info",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Warehouse",
+        "Manufacturing",
+        "Office",
+        "Retail",
+        "Agricultural",
+        "Aircraft Hangar",
+        "Other"
+      ],
+      "format": null,
+      "example": "Warehouse",
+      "aliases": [
+        "occupancy",
+        "use",
+        "function"
+      ],
+      "typical_source": "Cover sheet, code data block",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Feeds risk category and live loads."
+    },
+    {
+      "field_id": "jurisdiction_ahj",
+      "name": "Jurisdiction / AHU",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "city/county",
+      "example": "Weber County, UT",
+      "aliases": [
+        "AHJ",
+        "building department",
+        "permitting authority"
+      ],
+      "typical_source": "Code data block",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Determines adopted code edition and local amendments."
+    },
+    {
+      "field_id": "building_width",
+      "name": "Building Width",
+      "category": "Building Geometry",
+      "type": "number",
+      "unit": "ft",
+      "allowed_values": null,
+      "format": "feet, may be ft-in",
+      "example": "60",
+      "aliases": [
+        "width",
+        "clear span",
+        "out-to-out width",
+        "sidewall to sidewall"
+      ],
+      "typical_source": "Roof/foundation plan, elevations, dim strings",
+      "origin": "Template",
+      "required": true,
+      "notes": "Steel-line width. Distinguish clear width vs out-to-out; note which."
+    },
+    {
+      "field_id": "building_length",
+      "name": "Building Length",
+      "category": "Building Geometry",
+      "type": "number",
+      "unit": "ft",
+      "allowed_values": null,
+      "format": "feet, may be ft-in",
+      "example": "120",
+      "aliases": [
+        "length",
+        "endwall to endwall"
+      ],
+      "typical_source": "Roof/foundation plan, dim strings",
+      "origin": "Template",
+      "required": true,
+      "notes": null
+    },
+    {
+      "field_id": "total_square_feet",
+      "name": "Total Square Feet",
+      "category": "Building Geometry",
+      "type": "number",
+      "unit": "sf",
+      "allowed_values": null,
+      "format": "integer",
+      "example": "7200",
+      "aliases": [
+        "total SF",
+        "footprint",
+        "area"
+      ],
+      "typical_source": "Derived or plan area",
+      "origin": "Template",
+      "required": true,
+      "notes": "Usually width x length; verify against plan if canopies/mezzanine exist."
+    },
+    {
+      "field_id": "frame_type",
+      "name": "Frame Type",
+      "category": "Building Geometry",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Clear Span (Rigid Frame)",
+        "Multi-Span / Modular",
+        "Single Slope",
+        "Lean-to",
+        "Tapered Beam",
+        "Post-and-Beam"
+      ],
+      "format": null,
+      "example": "Clear Span",
+      "aliases": [
+        "frame",
+        "primary frame",
+        "structural system"
+      ],
+      "typical_source": "Cross section, framing plan, design notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Clear span vs interior columns drives steel weight."
+    },
+    {
+      "field_id": "number_of_bays",
+      "name": "Number of Bays",
+      "category": "Building Geometry",
+      "type": "integer",
+      "unit": null,
+      "allowed_values": null,
+      "format": "integer",
+      "example": "6",
+      "aliases": [
+        "bays",
+        "bay count"
+      ],
+      "typical_source": "Sidewall framing elevation",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Length / bay spacing."
+    },
+    {
+      "field_id": "bay_spacing",
+      "name": "Bay Spacing",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "ft",
+      "allowed_values": null,
+      "format": "list of bay widths",
+      "example": "20+25+25+25+25+20",
+      "aliases": [
+        "bay spacing",
+        "frame spacing",
+        "sidewall bays"
+      ],
+      "typical_source": "Sidewall framing elevation, dim string",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Affects purlin/girt and frame count."
+    },
+    {
+      "field_id": "endwall_type",
+      "name": "Endwall Frame Type",
+      "category": "Building Geometry",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Expandable (Rigid)",
+        "Bearing Frame (Post-and-Beam)"
+      ],
+      "format": null,
+      "example": "Bearing Frame",
+      "aliases": [
+        "endwall",
+        "expandable endwall",
+        "EW frame"
+      ],
+      "typical_source": "Endwall framing elevation",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Expandable endwalls add cost."
+    },
+    {
+      "field_id": "bsw_ridge_offset",
+      "name": "BSW Height / Ridge Offset",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "ft",
+      "allowed_values": null,
+      "format": "ft-in or feet",
+      "example": "Ridge offset 20'",
+      "aliases": [
+        "ridge offset",
+        "ridge location",
+        "offset ridge"
+      ],
+      "typical_source": "Cross section",
+      "origin": "Template",
+      "required": true,
+      "notes": "On offset-ridge or single-slope, distance of ridge from a sidewall. Clarify vs eave height."
+    },
+    {
+      "field_id": "bsw_eave_height",
+      "name": "BSW Eave Height",
+      "category": "Building Geometry",
+      "type": "dimension",
+      "unit": "ft-in",
+      "allowed_values": null,
+      "format": "feet-inches",
+      "example": "20'-0\"",
+      "aliases": [
+        "back eave height",
+        "BSW EH",
+        "low eave"
+      ],
+      "typical_source": "Elevations, cross section",
+      "origin": "Template",
+      "required": true,
+      "notes": "Back-sidewall eave height. A vertical dimension, never a load."
+    },
+    {
+      "field_id": "fsw_eave_height",
+      "name": "FSW Eave Height",
+      "category": "Building Geometry",
+      "type": "dimension",
+      "unit": "ft-in",
+      "allowed_values": null,
+      "format": "feet-inches",
+      "example": "24'-0\"",
+      "aliases": [
+        "front eave height",
+        "FSW EH",
+        "high eave"
+      ],
+      "typical_source": "Elevations, cross section",
+      "origin": "Template",
+      "required": true,
+      "notes": "Front-sidewall eave height. A vertical dimension, never a load."
+    },
+    {
+      "field_id": "ridge_height",
+      "name": "Ridge / Peak Height",
+      "category": "Building Geometry",
+      "type": "dimension",
+      "unit": "ft-in",
+      "allowed_values": null,
+      "format": "feet-inches",
+      "example": "26'-6\"",
+      "aliases": [
+        "peak height",
+        "ridge height",
+        "overall height"
+      ],
+      "typical_source": "Cross section, elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Overall height to ridge; useful for shipping/erection."
+    },
+    {
+      "field_id": "roof_overhangs",
+      "name": "Roof Overhangs / Extensions",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "in/ft",
+      "allowed_values": null,
+      "format": "description + dimension",
+      "example": "Eave 2'-0\" all sides",
+      "aliases": [
+        "overhang",
+        "eave extension",
+        "rake extension",
+        "soffit"
+      ],
+      "typical_source": "Elevations, eave detail",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Note location (eave/rake) and whether soffited."
+    },
+    {
+      "field_id": "parapet",
+      "name": "Parapet",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "ft-in",
+      "allowed_values": null,
+      "format": "height or None",
+      "example": "None",
+      "aliases": [
+        "parapet wall",
+        "parapet height"
+      ],
+      "typical_source": "Elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Adds framing and trim."
+    },
+    {
+      "field_id": "canopies_leantos",
+      "name": "Canopies / Lean-tos",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "description",
+      "example": "Front canopy 10' x 120'",
+      "aliases": [
+        "canopy",
+        "lean-to",
+        "awning",
+        "marquee"
+      ],
+      "typical_source": "Plans, elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Each addendum affects steel and panels."
+    },
+    {
+      "field_id": "mezzanine",
+      "name": "Mezzanine",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "sf / psf",
+      "allowed_values": null,
+      "format": "area + live load",
+      "example": "1200 sf @ 125 psf",
+      "aliases": [
+        "mezzanine",
+        "second floor",
+        "platform"
+      ],
+      "typical_source": "Plans, framing, loads table",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Capture area and design live load."
+    },
+    {
+      "field_id": "crane_system",
+      "name": "Crane System",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "ton",
+      "allowed_values": null,
+      "format": "type + capacity",
+      "example": "Top-running 10-ton bridge",
+      "aliases": [
+        "crane",
+        "bridge crane",
+        "monorail",
+        "jib"
+      ],
+      "typical_source": "Crane plan, loads notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Cranes drive frame design; capture type and capacity."
+    },
+    {
+      "field_id": "roof_panel_type",
+      "name": "Roof Panel Type",
+      "category": "Roof System",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "PBR / R-Panel",
+        "Standing Seam (SSR)",
+        "Through-Fastened",
+        "Other"
+      ],
+      "format": null,
+      "example": "Standing Seam",
+      "aliases": [
+        "roof panel",
+        "roof sheeting",
+        "SSR",
+        "PBR"
+      ],
+      "typical_source": "Roof plan, panel schedule, spec 07 41 13 / 13 34 19",
+      "origin": "Template",
+      "required": true,
+      "notes": "Standing seam vs through-fastened changes clips, cost, warranty."
+    },
+    {
+      "field_id": "roof_panel_gauge",
+      "name": "Roof Panel Gauge",
+      "category": "Roof System",
+      "type": "enum",
+      "unit": "ga",
+      "allowed_values": [
+        "26",
+        "24",
+        "22"
+      ],
+      "format": null,
+      "example": "24 ga",
+      "aliases": [
+        "gauge",
+        "ga",
+        "panel thickness"
+      ],
+      "typical_source": "Panel schedule, spec",
+      "origin": "Template",
+      "required": true,
+      "notes": null
+    },
+    {
+      "field_id": "roof_panel_finish",
+      "name": "Roof Panel Finish / Color",
+      "category": "Roof System",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "finish + color",
+      "example": "Galvalume; or SMP White",
+      "aliases": [
+        "color",
+        "finish",
+        "coating",
+        "Galvalume",
+        "SMP",
+        "PVDF",
+        "Kynar"
+      ],
+      "typical_source": "Finish schedule, spec, elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "SMP vs PVDF/Kynar affects price and warranty."
+    },
+    {
+      "field_id": "roof_slope_front",
+      "name": "Roof Slope - Front",
+      "category": "Roof System",
+      "type": "ratio",
+      "unit": "x:12",
+      "allowed_values": null,
+      "format": "rise:12",
+      "example": "1:12",
+      "aliases": [
+        "slope",
+        "pitch",
+        "roof pitch"
+      ],
+      "typical_source": "Cross section, roof plan",
+      "origin": "Template",
+      "required": true,
+      "notes": "Rise per 12 in run. Single-slope may have one value."
+    },
+    {
+      "field_id": "roof_slope_back",
+      "name": "Roof Slope - Back",
+      "category": "Roof System",
+      "type": "ratio",
+      "unit": "x:12",
+      "allowed_values": null,
+      "format": "rise:12",
+      "example": "1:12",
+      "aliases": [
+        "slope",
+        "pitch (back)"
+      ],
+      "typical_source": "Cross section, roof plan",
+      "origin": "Template",
+      "required": true,
+      "notes": null
+    },
+    {
+      "field_id": "wall_panel_type",
+      "name": "Wall Panel Type",
+      "category": "Wall System",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "PBR / R-Panel",
+        "Standing Seam",
+        "Through-Fastened",
+        "Other"
+      ],
+      "format": null,
+      "example": "PBR",
+      "aliases": [
+        "wall panel",
+        "wall sheeting",
+        "siding"
+      ],
+      "typical_source": "Elevations, panel schedule, spec",
+      "origin": "Template",
+      "required": true,
+      "notes": null
+    },
+    {
+      "field_id": "wall_panel_gauge",
+      "name": "Wall Panel Gauge",
+      "category": "Wall System",
+      "type": "enum",
+      "unit": "ga",
+      "allowed_values": [
+        "26",
+        "24",
+        "22"
+      ],
+      "format": null,
+      "example": "26 ga",
+      "aliases": [
+        "gauge",
+        "ga"
+      ],
+      "typical_source": "Panel schedule, spec",
+      "origin": "Template",
+      "required": true,
+      "notes": null
+    },
+    {
+      "field_id": "wall_panel_finish",
+      "name": "Wall Panel Finish / Color",
+      "category": "Wall System",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "finish + color",
+      "example": "SMP Polar White",
+      "aliases": [
+        "color",
+        "finish",
+        "coating",
+        "SMP",
+        "PVDF"
+      ],
+      "typical_source": "Finish schedule, elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Capture color and coating system."
+    },
+    {
+      "field_id": "wainscot",
+      "name": "Wainscot",
+      "category": "Wall System",
+      "type": "string",
+      "unit": "ft-in",
+      "allowed_values": null,
+      "format": "type + height or None",
+      "example": "None",
+      "aliases": [
+        "wainscot",
+        "masonry wainscot",
+        "split-face"
+      ],
+      "typical_source": "Elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Different panel/material at base; affects trim and cost."
+    },
+    {
+      "field_id": "liner_panel",
+      "name": "Liner Panel",
+      "category": "Wall System",
+      "type": "string",
+      "unit": "ft-in",
+      "allowed_values": null,
+      "format": "height/area or None",
+      "example": "None",
+      "aliases": [
+        "liner",
+        "interior liner panel"
+      ],
+      "typical_source": "Wall sections, spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Interior finish panel; adds material."
+    },
+    {
+      "field_id": "base_condition",
+      "name": "Base Condition",
+      "category": "Wall System",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Base Angle",
+        "Base Girt",
+        "Notch/Cee",
+        "Concrete Notch"
+      ],
+      "format": null,
+      "example": "Base Angle",
+      "aliases": [
+        "base angle",
+        "base trim",
+        "base condition"
+      ],
+      "typical_source": "Wall section detail",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Affects base trim and closure."
+    },
+    {
+      "field_id": "roof_insulation",
+      "name": "Roof Insulation (summary)",
+      "category": "Insulation",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "free text",
+      "example": "R-19 VRR, vinyl-faced",
+      "aliases": [
+        "roof insulation",
+        "roof insul"
+      ],
+      "typical_source": "Spec 07 21 00 / 13 34 19, wall/roof sections",
+      "origin": "Template",
+      "required": true,
+      "notes": "Keep the raw phrase; parsed sub-fields below."
+    },
+    {
+      "field_id": "roof_insulation_r_value",
+      "name": "Roof Insulation R-Value",
+      "category": "Insulation",
+      "type": "enum",
+      "unit": "R",
+      "allowed_values": [
+        "R-10",
+        "R-13",
+        "R-19",
+        "R-25",
+        "R-30",
+        "R-38"
+      ],
+      "format": null,
+      "example": "R-19",
+      "aliases": [
+        "R value",
+        "R-19",
+        "thermal resistance"
+      ],
+      "typical_source": "Spec, notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Separate for exact takeoff."
+    },
+    {
+      "field_id": "roof_insulation_type",
+      "name": "Roof Insulation Type",
+      "category": "Insulation",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Fiberglass Blanket (NIBA)",
+        "Banded (VRR)",
+        "Long Tab Banded",
+        "Filled Cavity",
+        "Rigid Board"
+      ],
+      "format": null,
+      "example": "VRR / Banded",
+      "aliases": [
+        "VRR",
+        "banded",
+        "long tab",
+        "filled cavity",
+        "sculpted"
+      ],
+      "typical_source": "Spec, roof section",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "System type drives labor and material."
+    },
+    {
+      "field_id": "roof_insulation_thickness",
+      "name": "Roof Insulation Thickness",
+      "category": "Insulation",
+      "type": "string",
+      "unit": "in",
+      "allowed_values": null,
+      "format": "thickness",
+      "example": "6\"",
+      "aliases": [
+        "thickness",
+        "blanket thickness"
+      ],
+      "typical_source": "Spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Blanket thickness, e.g. 3 in for R-10, 6 in for R-19."
+    },
+    {
+      "field_id": "roof_insulation_facing",
+      "name": "Roof Insulation Facing",
+      "category": "Insulation",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Vinyl (WMP-VR)",
+        "Foil (FSK)",
+        "Poly",
+        "Metal Building White"
+      ],
+      "format": null,
+      "example": "Vinyl (WMP-VR)",
+      "aliases": [
+        "facing",
+        "vapor retarder",
+        "WMP-VR",
+        "FSK"
+      ],
+      "typical_source": "Spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "wall_insulation",
+      "name": "Wall Insulation (summary)",
+      "category": "Insulation",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "free text",
+      "example": "R-13 fiberglass, vinyl-faced",
+      "aliases": [
+        "wall insulation",
+        "wall insul"
+      ],
+      "typical_source": "Spec, wall section",
+      "origin": "Template",
+      "required": true,
+      "notes": "Keep raw phrase; parsed sub-fields below."
+    },
+    {
+      "field_id": "wall_insulation_r_value",
+      "name": "Wall Insulation R-Value",
+      "category": "Insulation",
+      "type": "enum",
+      "unit": "R",
+      "allowed_values": [
+        "R-10",
+        "R-13",
+        "R-19",
+        "R-25"
+      ],
+      "format": null,
+      "example": "R-13",
+      "aliases": [
+        "R value",
+        "R-13"
+      ],
+      "typical_source": "Spec, notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "wall_insulation_type",
+      "name": "Wall Insulation Type",
+      "category": "Insulation",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Fiberglass Blanket",
+        "Banded",
+        "Filled Cavity",
+        "Rigid Board"
+      ],
+      "format": null,
+      "example": "Fiberglass Blanket",
+      "aliases": [
+        "insulation type"
+      ],
+      "typical_source": "Spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "wall_insulation_thickness",
+      "name": "Wall Insulation Thickness",
+      "category": "Insulation",
+      "type": "string",
+      "unit": "in",
+      "allowed_values": null,
+      "format": "thickness",
+      "example": "3\"",
+      "aliases": [
+        "thickness",
+        "blanket thickness"
+      ],
+      "typical_source": "Spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "wall_insulation_facing",
+      "name": "Wall Insulation Facing",
+      "category": "Insulation",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Vinyl (WMP-VR)",
+        "Foil (FSK)",
+        "Poly"
+      ],
+      "format": null,
+      "example": "Vinyl (WMP-VR)",
+      "aliases": [
+        "facing",
+        "vapor retarder"
+      ],
+      "typical_source": "Spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "building_code_ibc",
+      "name": "Building Code (IBC)",
+      "category": "Design Criteria - Codes",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "code + year",
+      "example": "2021 IBC",
+      "aliases": [
+        "IBC",
+        "building code",
+        "governing code"
+      ],
+      "typical_source": "Code data block, structural general notes (S-001)",
+      "origin": "Template",
+      "required": true,
+      "notes": "Capture edition year."
+    },
+    {
+      "field_id": "asce7_edition",
+      "name": "ASCE 7 Edition",
+      "category": "Design Criteria - Codes",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "ASCE 7-10",
+        "7-16",
+        "7-22"
+      ],
+      "format": null,
+      "example": "ASCE 7-16",
+      "aliases": [
+        "ASCE 7",
+        "load standard"
+      ],
+      "typical_source": "Structural general notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Governs wind/seismic methodology."
+    },
+    {
+      "field_id": "risk_category",
+      "name": "Risk Category",
+      "category": "Design Criteria - Codes",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "I",
+        "II",
+        "III",
+        "IV"
+      ],
+      "format": null,
+      "example": "II",
+      "aliases": [
+        "risk category",
+        "occupancy category",
+        "IBC category"
+      ],
+      "typical_source": "Code data block, general notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Roman numeral I-IV. Drives importance factors."
+    },
+    {
+      "field_id": "enclosure_class",
+      "name": "Enclosure Classification",
+      "category": "Design Criteria - Codes",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Enclosed",
+        "Partially Enclosed",
+        "Open"
+      ],
+      "format": null,
+      "example": "Enclosed",
+      "aliases": [
+        "enclosure",
+        "enclosed",
+        "partially enclosed"
+      ],
+      "typical_source": "Wind design notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Affects internal pressure (GCpi)."
+    },
+    {
+      "field_id": "roof_live_load",
+      "name": "Roof Live Load",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": "psf",
+      "allowed_values": null,
+      "format": "psf",
+      "example": "20",
+      "aliases": [
+        "live load",
+        "LL",
+        "roof LL"
+      ],
+      "typical_source": "Loads table, general notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "psf. Do not confuse with snow."
+    },
+    {
+      "field_id": "dead_load",
+      "name": "Dead Load",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": "psf",
+      "allowed_values": null,
+      "format": "psf",
+      "example": "3",
+      "aliases": [
+        "dead load",
+        "DL"
+      ],
+      "typical_source": "Loads table",
+      "origin": "Template",
+      "required": true,
+      "notes": null
+    },
+    {
+      "field_id": "collateral_load",
+      "name": "Collateral Load",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": "psf",
+      "allowed_values": null,
+      "format": "psf",
+      "example": "5",
+      "aliases": [
+        "collateral",
+        "COLL",
+        "misc dead",
+        "hung load"
+      ],
+      "typical_source": "Loads table, general notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "For MEP/sprinkler/ceilings."
+    },
+    {
+      "field_id": "ground_snow_load",
+      "name": "Ground Snow Load",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": "psf",
+      "allowed_values": null,
+      "format": "psf",
+      "example": "30",
+      "aliases": [
+        "ground snow",
+        "Pg",
+        "snow load"
+      ],
+      "typical_source": "Loads table, general notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Pg. Distinct from roof snow."
+    },
+    {
+      "field_id": "roof_snow_load",
+      "name": "Roof Snow Load",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": "psf",
+      "allowed_values": null,
+      "format": "psf",
+      "example": "24",
+      "aliases": [
+        "roof snow",
+        "Pf",
+        "flat roof snow",
+        "Ps"
+      ],
+      "typical_source": "Loads table",
+      "origin": "Template",
+      "required": true,
+      "notes": "Flat or sloped (Pf/Ps)."
+    },
+    {
+      "field_id": "snow_ce",
+      "name": "Snow Exposure Factor (Ce)",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": null,
+      "allowed_values": null,
+      "format": "0.7-1.2",
+      "example": "1.0",
+      "aliases": [
+        "Ce",
+        "exposure factor"
+      ],
+      "typical_source": "Loads table",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "snow_ct",
+      "name": "Snow Thermal Factor (Ct)",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": null,
+      "allowed_values": null,
+      "format": "1.0-1.2",
+      "example": "1.0",
+      "aliases": [
+        "Ct",
+        "thermal factor"
+      ],
+      "typical_source": "Loads table",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "snow_is",
+      "name": "Snow Importance Factor (Is)",
+      "category": "Design Criteria - Loads",
+      "type": "number",
+      "unit": null,
+      "allowed_values": null,
+      "format": "0.8-1.2",
+      "example": "1.0",
+      "aliases": [
+        "Is",
+        "snow importance"
+      ],
+      "typical_source": "Loads table",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "unbalanced_snow",
+      "name": "Unbalanced / Drift Snow",
+      "category": "Design Criteria - Loads",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "Yes/No + note",
+      "example": "Considered",
+      "aliases": [
+        "drift",
+        "unbalanced snow",
+        "snow drift"
+      ],
+      "typical_source": "Loads notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Flag if drift/unbalanced governs."
+    },
+    {
+      "field_id": "basic_wind_speed",
+      "name": "Basic Wind Speed",
+      "category": "Design Criteria - Wind",
+      "type": "number",
+      "unit": "mph",
+      "allowed_values": null,
+      "format": "2- or 3-digit mph",
+      "example": "115",
+      "aliases": [
+        "wind speed",
+        "Vult",
+        "Vasd",
+        "MPH",
+        "basic wind speed"
+      ],
+      "typical_source": "Wind design notes, loads table",
+      "origin": "Template",
+      "required": true,
+      "notes": "Value in mph WITH the mph unit. Never read a dimension like 24'-0\" as wind speed."
+    },
+    {
+      "field_id": "wind_exposure",
+      "name": "Wind Exposure",
+      "category": "Design Criteria - Wind",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "B",
+        "C",
+        "D"
+      ],
+      "format": null,
+      "example": "C",
+      "aliases": [
+        "exposure category",
+        "exposure B/C/D"
+      ],
+      "typical_source": "Wind design notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Single letter B, C, or D."
+    },
+    {
+      "field_id": "wind_gcpi",
+      "name": "Internal Pressure Coeff. (GCpi)",
+      "category": "Design Criteria - Wind",
+      "type": "number",
+      "unit": null,
+      "allowed_values": null,
+      "format": "+/-0.18 or +/-0.55",
+      "example": "+/-0.18",
+      "aliases": [
+        "GCpi",
+        "internal pressure"
+      ],
+      "typical_source": "Wind design notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Tied to enclosure classification."
+    },
+    {
+      "field_id": "wind_borne_debris",
+      "name": "Wind-Borne Debris Region",
+      "category": "Design Criteria - Wind",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "Yes/No",
+      "example": "No",
+      "aliases": [
+        "WBDR",
+        "debris region",
+        "impact"
+      ],
+      "typical_source": "Wind design notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Affects openings/glazing protection."
+    },
+    {
+      "field_id": "seismic_site_class",
+      "name": "Seismic Site Class",
+      "category": "Design Criteria - Seismic",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "format": null,
+      "example": "D",
+      "aliases": [
+        "site class"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Single letter A-F. Default D if unstated per code."
+    },
+    {
+      "field_id": "seismic_sdc",
+      "name": "Seismic Design Category",
+      "category": "Design Criteria - Seismic",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F"
+      ],
+      "format": null,
+      "example": "B",
+      "aliases": [
+        "SDC",
+        "seismic design category"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Single letter A-F."
+    },
+    {
+      "field_id": "seismic_ss",
+      "name": "Ss (Mapped Short-Period)",
+      "category": "Design Criteria - Seismic",
+      "type": "number",
+      "unit": "g",
+      "allowed_values": null,
+      "format": "decimal g",
+      "example": "0.312",
+      "aliases": [
+        "Ss",
+        "short period",
+        "mapped Ss"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Spectral acceleration, g."
+    },
+    {
+      "field_id": "seismic_s1",
+      "name": "S1 (Mapped 1-Second)",
+      "category": "Design Criteria - Seismic",
+      "type": "number",
+      "unit": "g",
+      "allowed_values": null,
+      "format": "decimal g",
+      "example": "0.121",
+      "aliases": [
+        "S1",
+        "one second",
+        "mapped S1"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Template",
+      "required": true,
+      "notes": "Spectral acceleration, g."
+    },
+    {
+      "field_id": "seismic_sds",
+      "name": "Sds (Design Short-Period)",
+      "category": "Design Criteria - Seismic",
+      "type": "number",
+      "unit": "g",
+      "allowed_values": null,
+      "format": "decimal g",
+      "example": "0.333",
+      "aliases": [
+        "Sds",
+        "design spectral short"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "seismic_sd1",
+      "name": "Sd1 (Design 1-Second)",
+      "category": "Design Criteria - Seismic",
+      "type": "number",
+      "unit": "g",
+      "allowed_values": null,
+      "format": "decimal g",
+      "example": "0.193",
+      "aliases": [
+        "Sd1",
+        "design spectral 1s"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "seismic_ie",
+      "name": "Seismic Importance Factor (Ie)",
+      "category": "Design Criteria - Seismic",
+      "type": "number",
+      "unit": null,
+      "allowed_values": null,
+      "format": "1.0-1.5",
+      "example": "1.0",
+      "aliases": [
+        "Ie",
+        "importance factor"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "seismic_sfrs",
+      "name": "Seismic Force-Resisting System",
+      "category": "Design Criteria - Seismic",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "system + R",
+      "example": "Ordinary moment frame, R=3.5",
+      "aliases": [
+        "SFRS",
+        "R value",
+        "lateral system"
+      ],
+      "typical_source": "Seismic design notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "defl_roof_live",
+      "name": "Roof Deflection Limit (Live)",
+      "category": "Serviceability",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "L/xxx",
+      "example": "L/240",
+      "aliases": [
+        "deflection",
+        "L/240",
+        "roof deflection"
+      ],
+      "typical_source": "Serviceability notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Common L/240 live, L/180 total for metal buildings."
+    },
+    {
+      "field_id": "defl_wall",
+      "name": "Wall Deflection Limit",
+      "category": "Serviceability",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "L/xxx",
+      "example": "L/120",
+      "aliases": [
+        "wall deflection",
+        "girt deflection"
+      ],
+      "typical_source": "Serviceability notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Wind, e.g. L/120 or L/90."
+    },
+    {
+      "field_id": "drift_frame",
+      "name": "Frame Drift Limit",
+      "category": "Serviceability",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "H/xxx",
+      "example": "H/60",
+      "aliases": [
+        "drift",
+        "lateral drift",
+        "sway"
+      ],
+      "typical_source": "Serviceability notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "e.g. H/60 to H/100 wind."
+    },
+    {
+      "field_id": "overhead_doors",
+      "name": "Overhead / Roll-up Doors",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "count + sizes",
+      "example": "3 @ 12'x14'",
+      "aliases": [
+        "OHD",
+        "roll-up",
+        "sectional door",
+        "dock door"
+      ],
+      "typical_source": "Door schedule, elevations, plan",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Each framed opening adds jamb/header steel and trim."
+    },
+    {
+      "field_id": "personnel_doors",
+      "name": "Personnel Doors",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "count + size/type",
+      "example": "2 @ 3070 HM",
+      "aliases": [
+        "man door",
+        "walk door",
+        "PE door",
+        "3070"
+      ],
+      "typical_source": "Door schedule, elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "3070 = 3'-0\" x 7'-0\". Note steel vs aluminum."
+    },
+    {
+      "field_id": "windows",
+      "name": "Windows",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "count + sizes",
+      "example": "4 @ 4'x3'",
+      "aliases": [
+        "windows",
+        "glazing",
+        "fixed window"
+      ],
+      "typical_source": "Elevations, schedule",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "framed_openings",
+      "name": "Framed Openings (other)",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "count + sizes",
+      "example": "2 @ 10'x10'",
+      "aliases": [
+        "framed opening",
+        "FO",
+        "wall opening"
+      ],
+      "typical_source": "Plans, elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "For louvers/equipment not otherwise scheduled."
+    },
+    {
+      "field_id": "louvers",
+      "name": "Louvers",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "count + sizes",
+      "example": "2 @ 4'x4'",
+      "aliases": [
+        "louver",
+        "vent louver"
+      ],
+      "typical_source": "Elevations, mechanical",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "gutters_downspouts",
+      "name": "Gutters & Downspouts",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": "LF",
+      "allowed_values": null,
+      "format": "included? + LF",
+      "example": "Included, both sidewalls",
+      "aliases": [
+        "gutter",
+        "downspout",
+        "DS",
+        "eave gutter"
+      ],
+      "typical_source": "Roof plan, eave detail, spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Capture linear feet or sidewalls covered."
+    },
+    {
+      "field_id": "ventilation",
+      "name": "Ridge Vents / Ventilators",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "type + count/LF",
+      "example": "Ridge vent 120 LF",
+      "aliases": [
+        "ridge vent",
+        "gravity ventilator",
+        "power vent",
+        "turbine"
+      ],
+      "typical_source": "Roof plan, spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "skylights",
+      "name": "Skylights / Light Panels",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "count or %",
+      "example": "2% roof",
+      "aliases": [
+        "skylight",
+        "light panel",
+        "poly panel"
+      ],
+      "typical_source": "Roof plan, spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "roof_curbs",
+      "name": "Roof Curbs",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "count + sizes",
+      "example": "4 @ 24\"x24\"",
+      "aliases": [
+        "curb",
+        "equipment curb",
+        "RTU curb"
+      ],
+      "typical_source": "Roof plan, mechanical",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "For RTUs/exhaust; adds framing."
+    },
+    {
+      "field_id": "trim_package",
+      "name": "Trim / Flashing Package",
+      "category": "Openings & Accessories",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "description",
+      "example": "Standard rake, corner, base, eave",
+      "aliases": [
+        "trim",
+        "flashing",
+        "closures"
+      ],
+      "typical_source": "Spec, details",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "anchor_bolts_by",
+      "name": "Anchor Bolts By",
+      "category": "Foundation Interface",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Metal Building Mfr",
+        "By Others"
+      ],
+      "format": null,
+      "example": "By Others",
+      "aliases": [
+        "anchor bolts",
+        "AB",
+        "by others"
+      ],
+      "typical_source": "Anchor bolt plan, notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Scope clarity item."
+    },
+    {
+      "field_id": "column_reactions",
+      "name": "Column Reactions Provided",
+      "category": "Foundation Interface",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "Yes/No",
+      "example": "Yes",
+      "aliases": [
+        "reactions",
+        "column reactions",
+        "base reactions"
+      ],
+      "typical_source": "Anchor bolt plan, reaction table",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Provided to foundation engineer."
+    },
+    {
+      "field_id": "foundation_by",
+      "name": "Foundation By",
+      "category": "Foundation Interface",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "By Others",
+        "In Scope"
+      ],
+      "format": null,
+      "example": "By Others",
+      "aliases": [
+        "foundation",
+        "slab",
+        "by others"
+      ],
+      "typical_source": "General notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Almost always by others; confirm."
+    },
+    {
+      "field_id": "erection_by",
+      "name": "Erection By",
+      "category": "Commercial / Scope",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "By Others",
+        "In Scope"
+      ],
+      "format": null,
+      "example": "By Others",
+      "aliases": [
+        "erection",
+        "install",
+        "by others"
+      ],
+      "typical_source": "Scope notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Material-only vs erected changes bid basis."
+    },
+    {
+      "field_id": "freight",
+      "name": "Freight / Delivery",
+      "category": "Commercial / Scope",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "included? + FOB",
+      "example": "FOB jobsite",
+      "aliases": [
+        "freight",
+        "delivery",
+        "shipping",
+        "FOB"
+      ],
+      "typical_source": "Scope notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "paint_warranty",
+      "name": "Paint / Finish Warranty",
+      "category": "Commercial / Scope",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "years / type",
+      "example": "25 yr SMP",
+      "aliases": [
+        "warranty",
+        "paint warranty",
+        "finish warranty"
+      ],
+      "typical_source": "Spec, finish schedule",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "lead_time",
+      "name": "Lead Time",
+      "category": "Commercial / Scope",
+      "type": "string",
+      "unit": "weeks",
+      "allowed_values": null,
+      "format": "weeks",
+      "example": "10-12 weeks",
+      "aliases": [
+        "lead time",
+        "delivery time",
+        "schedule"
+      ],
+      "typical_source": "Scope notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    }
+  ]
+}

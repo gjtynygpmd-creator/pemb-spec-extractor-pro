@@ -1,36 +1,56 @@
-"""Regression test for v1.9.2 memory safety.
+"""Tests for the schema loader that reconciles both extraction paths.
 
-Large-format sheets must not render to unbounded bitmaps (the cause of the
-worker being OOM-killed and the job hanging at 18%). Run from backend/:
-    DATABASE_URL=postgresql://unused python tests/test_render_bounds.py
+Run from backend/:
+    DATABASE_URL=postgresql://unused PYTHONPATH=. python tests/test_schema_loader.py
 """
 
-import fitz
-
-from app.core.config import settings
-from app.services.vision_extraction import render_page_png
+from app.services import schema_loader as S
 
 
-def _edge_for(width_in, height_in):
-    doc = fitz.open()
-    page = doc.new_page(width=width_in * 72, height=height_in * 72)
-    png = render_page_png(page, dpi=settings.vision_dpi)
-    pix = fitz.Pixmap(png)
-    return max(pix.width, pix.height)
+def test_loads_all_fields():
+    assert S.field_count() >= 90
+    assert S.version()
 
 
-def test_large_sheet_is_bounded():
-    # ARCH-D (34x22 in) and ARCH-E (48x36 in) must both respect the edge cap.
-    assert _edge_for(34, 22) <= settings.vision_max_edge_px
-    assert _edge_for(48, 36) <= settings.vision_max_edge_px
+def test_resolve_by_id_name_alias_and_regex_name():
+    # by field_id
+    assert S.resolve("basic_wind_speed").name == "Basic Wind Speed"
+    # by exact display name
+    assert S.resolve("FSW Eave Height").field_id == "fsw_eave_height"
+    # by alias
+    assert S.resolve("Vult").field_id == "basic_wind_speed"
+    # by regex engine name that differs from the schema display name
+    assert S.resolve("Site Class").field_id == "seismic_site_class"
+    assert S.resolve("Building Code").field_id == "building_code_ibc"
+    assert S.resolve("Overhead Doors").field_id == "overhead_doors"
+    assert S.resolve("Roof Insulation").field_id == "roof_insulation"
+    assert S.resolve("Ss").field_id == "seismic_ss"
 
 
-def test_small_page_not_upscaled_past_cap():
-    # A letter-size page at target DPI stays well under the cap.
-    assert _edge_for(8.5, 11) <= settings.vision_max_edge_px
+def test_unknown_passes_through():
+    # A regex-only field not in the schema keeps its name and is not force-categorized.
+    assert S.resolve("Building Orientation") is None
+    assert S.canonical_name("Building Orientation") == "Building Orientation"
+
+
+def test_enum_coercion():
+    assert S.coerce_value("wind_exposure", "c") == "C"
+    assert S.coerce_value("risk_category", "II") == "II"
+    # non-enum returns trimmed value unchanged
+    assert S.coerce_value("basic_wind_speed", " 115 mph ") == "115 mph"
+
+
+def test_vision_instructions_are_schema_driven():
+    text = S.build_vision_instructions()
+    assert "basic_wind_speed" in text
+    assert "[Design Criteria - Wind]" in text
+    assert "field_id" in text
 
 
 if __name__ == "__main__":
-    test_large_sheet_is_bounded()
-    test_small_page_not_upscaled_past_cap()
-    print("All v1.9.2 render-bound tests passed.")
+    test_loads_all_fields()
+    test_resolve_by_id_name_alias_and_regex_name()
+    test_unknown_passes_through()
+    test_enum_coercion()
+    test_vision_instructions_are_schema_driven()
+    print("All schema loader tests passed.")

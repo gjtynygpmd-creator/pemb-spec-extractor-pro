@@ -1,30 +1,20 @@
-# Development Roadmap
+# v1.6 Estimator Core Benchmark
 
-## Milestone 1 — Infrastructure
-- Netlify frontend
-- FastAPI backend
-- Cloudflare R2 multipart uploads
-- Neon PostgreSQL
-- Processing job records
+Benchmark project: Marshall University Bill Noe Flight School — combined specification manual and 65-sheet drawing set.
 
-## Milestone 2 — OCR Notes and Schedules
-- Searchable PDF extraction
-- Image-only page detection
-- OCR
-- Page and sheet references
-- PEMB note-field library
+Verified automatically located during local regression run:
 
-## Milestone 3 — Drawing Vision
-- Sheet classification
-- Dimensions
-- Roof slope
-- Eave heights
-- Bay spacing
-- Framed openings
+- Project address
+- 2018 IBC
+- Occupancy S-1
+- Risk Category II
+- Ground snow load 30 psf
+- Roof snow load 24 psf
+- Site Class B
+- Seismic Design Category A
+- Ss 0.154
+- S1 0.064
+- Eave height candidate
+- Wall panel candidate
 
-## Milestone 4 — Estimating Exports
-- standard estimating workbook
-- Zoho CSV
-- Conflict report
-- Missing-information report
-- Suggested RFIs
+The release intentionally suppresses non-core narrative matches such as generic galvanized-steel paragraphs previously misidentified as gutters, downspouts, and roof curbs. Missing fields remain visible for estimator entry instead of being populated with weak text.

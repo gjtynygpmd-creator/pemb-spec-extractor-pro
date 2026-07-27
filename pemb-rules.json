@@ -1,46 +1,27 @@
-# Large-file processing architecture
+# v1.2 Processing Engine MVP
 
-1. **Netlify frontend**
-   - Selects multiple files.
-   - Splits each file into 16 MB parts.
-   - Requests signed upload URLs from the API.
-   - Uploads each part directly to S3-compatible storage.
-   - Starts a processing job after all uploads complete.
+## Purpose
+Move analysis jobs beyond `queued` by adding a persistent Render background worker.
 
-2. **FastAPI control service**
-   - Creates projects and multipart upload sessions.
-   - Generates signed part URLs.
-   - Completes multipart uploads.
-   - Starts and reports extraction jobs.
-   - Does not proxy the file bytes, keeping API memory and timeout usage low.
+## Workflow
+1. API creates a queued job.
+2. Worker atomically claims the oldest queued job.
+3. Worker downloads PDFs from Cloudflare R2.
+4. PyMuPDF reads searchable text and page metadata.
+5. Pages are classified and relevant CSI divisions are detected.
+6. Initial PEMB fields are extracted with source page references.
+7. Conflicting values are flagged for review.
+8. Neon stores pages, events, fields, and status updates.
+9. Netlify polls the workspace while a job is active.
 
-3. **Object storage**
-   - Cloudflare R2, AWS S3, Backblaze B2 S3, or equivalent.
-   - Source files under `projects/<project_id>/source/`.
-   - Rendered page images, OCR JSON, extracted records, and exports in separate prefixes.
+## Supported in this MVP
+- Searchable PDFs
+- Division 05 and Division 13 as primary targets
+- Division 07 insulation and Division 08 doors/openings as important optional targets
+- Structural/general notes, roof plans, framing plans, elevations, wall sections, and door schedules
 
-4. **Processing workers**
-   - Download or stream each file from object storage.
-   - Inspect each PDF page's embedded text.
-   - Route each page (implemented in v1.9.0):
-     - Rich, label-dense text layer -> fast regex extraction (spec manuals, structural notes).
-     - Otherwise -> vision extraction: the page is rendered to an image and read by
-       Claude, which returns the PEMB schema as JSON (drawings, scanned, image-only).
-     - Vision unavailable or empty -> page flagged for OCR/manual review, never dropped.
-   - Classify sheets by title block and content.
-   - Normalize extracted values to the PEMB schema through shared cleaners so both
-     paths populate the same dashboard fields.
-   - Store page, sheet, excerpt, confidence, and extraction method for each value.
-   - Generate Excel, Zoho CSV, conflict report, and estimator summary.
-
-   Still on the roadmap: safe ZIP expansion, tiled rendering for very large sheets,
-   and bounding-box capture for on-sheet highlighting.
-
-5. **Production requirements**
-   - Persistent database instead of the in-memory prototype store.
-   - Queue service and separate workers.
-   - Authentication.
-   - Virus scanning.
-   - ZIP-bomb and path-traversal protection.
-   - Automatic file retention/deletion policy.
-   - Upload retry and resume state.
+## Deferred
+- OCR for image-only pages
+- Drawing vision and dimension recognition
+- AI semantic extraction
+- User authentication and subscriptions

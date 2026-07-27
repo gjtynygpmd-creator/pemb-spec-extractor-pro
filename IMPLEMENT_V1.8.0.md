@@ -1,11 +1,36 @@
-# Implement v1.7.0 Field Test Release
+"""Regression test for v1.9.2 memory safety.
 
-1. Replace the repository contents with this package while preserving your environment variables.
-2. Commit and push to the GitHub branch connected to Netlify and Render.
-3. Recommended commit: `feat: release v1.7.0 geometry field test`
-4. Confirm the Render API and worker both redeploy successfully.
-5. Open the Netlify application and verify the `v1.7.0 Field Test` badge.
-6. Create a fresh project for the live bid, upload drawings/specifications, and run analysis.
-7. Export Excel and PDF after reviewing the extracted values.
+Large-format sheets must not render to unbounded bitmaps (the cause of the
+worker being OOM-killed and the job hanging at 18%). Run from backend/:
+    DATABASE_URL=postgresql://unused python tests/test_render_bounds.py
+"""
 
-No database migration is required for this release. Existing projects remain available, but re-run analysis to use the new extraction logic.
+import fitz
+
+from app.core.config import settings
+from app.services.vision_extraction import render_page_png
+
+
+def _edge_for(width_in, height_in):
+    doc = fitz.open()
+    page = doc.new_page(width=width_in * 72, height=height_in * 72)
+    png = render_page_png(page, dpi=settings.vision_dpi)
+    pix = fitz.Pixmap(png)
+    return max(pix.width, pix.height)
+
+
+def test_large_sheet_is_bounded():
+    # ARCH-D (34x22 in) and ARCH-E (48x36 in) must both respect the edge cap.
+    assert _edge_for(34, 22) <= settings.vision_max_edge_px
+    assert _edge_for(48, 36) <= settings.vision_max_edge_px
+
+
+def test_small_page_not_upscaled_past_cap():
+    # A letter-size page at target DPI stays well under the cap.
+    assert _edge_for(8.5, 11) <= settings.vision_max_edge_px
+
+
+if __name__ == "__main__":
+    test_large_sheet_is_bounded()
+    test_small_page_not_upscaled_past_cap()
+    print("All v1.9.2 render-bound tests passed.")

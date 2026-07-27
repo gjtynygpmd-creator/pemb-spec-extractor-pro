@@ -1,34 +1,138 @@
 
-:root{--bg:#f3f5f7;--panel:#fff;--ink:#17191d;--muted:#68707b;--line:#dce1e6;--orange:#f36c21;--dark:#171717;--green:#197a42;--red:#b42318;--blue:#2368a2}
-*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-header{background:linear-gradient(120deg,#111,#252525);color:#fff;padding:32px max(4vw,28px);display:flex;justify-content:space-between;gap:20px;border-bottom:5px solid var(--orange)}
-h1{font-size:clamp(30px,4vw,50px);margin:6px 0 8px}.eyebrow{font-size:12px;letter-spacing:.16em;color:#ff9a63;font-weight:800}.version{border:1px solid #666;border-radius:999px;padding:8px 12px;height:max-content;font-size:12px}
-main{max-width:1500px;margin:0 auto;padding:28px}.panel{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:20px;box-shadow:0 5px 18px rgba(20,25,30,.05)}
-.toolbar{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}.muted{color:var(--muted)}
-.project-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}label{font-size:12px;font-weight:700;color:#4d5560}input,select,button{font:inherit;border:1px solid #cfd5dc;border-radius:8px;padding:10px 11px;background:#fff;color:var(--ink)}label input{width:100%;display:block;margin-top:6px}
-button{cursor:pointer;background:var(--dark);color:#fff;border-color:var(--dark);font-weight:700}.secondary{background:#fff;color:var(--ink);border-color:#cfd5dc}
-.api-status{font-size:12px;padding:7px 10px;border-radius:999px;background:#fff3df;color:#986000}.api-status.online{background:#e6f5eb;color:var(--green)}.api-status.offline{background:#fdebea;color:var(--red)}
-.dropzone{border:2px dashed #abb4bf;border-radius:12px;padding:36px;text-align:center;display:flex;flex-direction:column;gap:8px;cursor:pointer;background:#fafbfc}.dropzone.drag{border-color:var(--orange);background:#fff6f0}.dropzone input{display:none}.dropzone strong{font-size:18px}.dropzone span{font-size:12px;color:var(--muted)}.limit-note{font-style:italic}
-.upload-toolbar{display:flex;justify-content:space-between;align-items:center;margin-top:16px}.inline{display:flex;align-items:center;gap:8px}.inline select{margin:0}
-.file-list{margin-top:18px;display:grid;gap:10px}.file-row{border:1px solid var(--line);border-radius:10px;padding:12px}.file-head{display:flex;justify-content:space-between;gap:12px}.file-name{font-weight:700}.file-meta{font-size:12px;color:var(--muted)}.progress{height:9px;background:#edf0f3;border-radius:999px;overflow:hidden;margin-top:10px}.progress>div{height:100%;width:0;background:var(--orange);transition:width .2s}.file-status{font-size:12px;color:var(--muted);margin-top:7px}
-.analysis-status{font-size:13px;margin-top:14px}.analysis-status.success{color:var(--green);font-weight:700}.analysis-status.error{color:var(--red);font-weight:700}
-.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}.metric{background:#fff;border:1px solid var(--line);border-left:5px solid var(--orange);border-radius:12px;padding:18px}.metric span{display:block;font-weight:800;font-size:26px}.metric small{color:var(--muted)}
-.pipeline{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:16px}.stage{padding:14px;border:1px solid var(--line);border-radius:10px;background:#f8f9fa}.stage b{display:inline-grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#ddd;margin-bottom:10px}.stage span,.stage small{display:block}.stage span{font-weight:800;font-size:13px}.stage small{color:var(--muted);font-size:11px;margin-top:4px}.stage.active{border-color:var(--orange);background:#fff6f0}.stage.done{border-color:#8bc99f;background:#edf8f1}.stage.done b{background:var(--green);color:#fff}
-.jobs.empty{color:var(--muted)}.job-card{border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:10px;display:grid;grid-template-columns:1fr auto;gap:12px}.job-title{font-weight:800}.job-details{font-size:12px;color:var(--muted);margin-top:5px}.badge{font-size:11px;border-radius:999px;padding:6px 8px;background:#eef1f4;height:max-content}
-footer{text-align:center;padding:5px 20px 28px;color:#7b828c;font-size:12px}
-@media(max-width:1000px){.project-grid{grid-template-columns:repeat(2,1fr)}.pipeline{grid-template-columns:repeat(3,1fr)}}@media(max-width:650px){header,.toolbar,.upload-toolbar{flex-direction:column}.project-grid,.metrics,.pipeline{grid-template-columns:1fr}}
+const API_BASE = (window.PEMB_API_BASE || localStorage.getItem('pembApiBase') || 'http://localhost:8000').replace(/\/$/,'');
+const PART_SIZE = 16 * 1024 * 1024;
+let selectedFiles = [];
+let totalUploaded = 0;
+let activeJob = null;
 
-.hidden{display:none!important}.project-form{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;background:#f7f8fa;border:1px solid var(--line);padding:16px;border-radius:10px;margin-bottom:18px}
-.project-form label input{width:100%;display:block;margin-top:6px}.form-actions{grid-column:1/-1;display:flex;gap:8px}
-.project-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.project-card{border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff}.project-card-head{display:flex;justify-content:space-between;gap:12px}.project-card h3{margin:0 0 5px}.project-card p{color:var(--muted);font-size:13px}.project-stats{display:flex;gap:18px;margin:18px 0}.project-stats span{font-size:12px;color:var(--muted)}.project-stats b{display:block;font-size:20px;color:var(--ink)}.project-meta{font-size:12px;color:var(--muted)}
-@media(max-width:900px){.project-cards{grid-template-columns:1fr}.project-form{grid-template-columns:1fr}}
-
-.project-card{cursor:pointer;transition:transform .15s,box-shadow .15s}.project-card:hover{transform:translateY(-2px);box-shadow:0 9px 24px rgba(20,25,30,.09)}
-.button{display:inline-block;text-decoration:none;border:1px solid #cfd5dc;border-radius:8px;padding:10px 12px;font-weight:700;font-size:13px}
-.stored-list{display:grid;gap:9px}.stored-file{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:12px}
-.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:20px;padding-top:18px;border-top:1px solid #dfe5ec}.analysis-grid h3{margin:0 0 10px}.summary-list{display:flex;flex-wrap:wrap;gap:8px}.summary-chip{background:#f3f6f8;border:1px solid #dbe2e8;border-radius:999px;padding:7px 10px;font-size:.86rem}.activity-feed{display:grid;gap:8px;max-height:280px;overflow:auto}.activity-item{display:grid;gap:3px;border-left:3px solid #20242a;padding:7px 10px;background:#f8fafb}.activity-item span{font-size:.88rem}.activity-item small{color:#68727d}.job-main{flex:1}.job-progress{margin-top:8px;max-width:520px}@media(max-width:800px){.analysis-grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}
-/* v1.3 Estimator Review Alpha */
-.review-hero{display:flex;justify-content:space-between;align-items:center;gap:20px}.review-hero h2{margin:0 0 6px}.review-actions{display:flex;gap:8px}.review-layout{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(280px,.8fr);gap:20px}.sticky-panel{position:sticky;top:18px}.field-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field-card{text-align:left;background:#fff;color:var(--ink);border:1px solid var(--line);border-left:5px solid #aeb6bf;border-radius:11px;padding:15px;min-height:130px}.field-card:hover{box-shadow:0 8px 22px rgba(20,25,30,.09);transform:translateY(-1px)}.field-card.status-accepted{border-left-color:var(--green)}.field-card.status-conflict{border-left-color:var(--red);background:#fff8f7}.field-card-top{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px}.field-category{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.status-pill{font-size:10px;border-radius:999px;background:#edf0f3;padding:5px 7px}.field-value{font-size:20px;font-weight:800;margin:9px 0}.field-meta{font-size:11px;color:var(--muted);line-height:1.45}.readiness-bar{height:12px;border-radius:999px;background:#edf0f3;overflow:hidden;margin:10px 0}.readiness-bar>div{height:100%;background:var(--green);transition:width .25s}.checklist{display:grid;gap:8px;margin-bottom:20px}.check-item{display:flex;align-items:center;gap:10px;text-align:left;background:#fff;color:var(--ink);border:1px solid var(--line);padding:10px}.check-item span{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;font-weight:900;background:#fff1e7;color:#a7460f}.check-item.conflict span{background:#fdebea;color:var(--red)}.check-item small{display:block;color:var(--muted);margin-top:3px}.check-ok{font-size:13px;color:var(--green);padding:10px;background:#edf8f1;border-radius:8px}.drawer{position:fixed;inset:0;z-index:1000}.drawer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.48)}.drawer-panel{position:absolute;right:0;top:0;height:100%;width:min(520px,94vw);background:#fff;padding:26px;box-shadow:-12px 0 35px rgba(0,0,0,.18);overflow:auto}.drawer-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:24px}.drawer-head h2{margin:5px 0}.drawer-panel label{display:block;margin-bottom:16px}.drawer-panel textarea,.drawer-panel select{display:block;width:100%;margin-top:7px}.source-box{border:1px solid var(--line);background:#f7f9fa;border-radius:10px;padding:14px;margin-bottom:18px}.source-box blockquote{margin:12px 0 0;border-left:3px solid var(--orange);padding-left:12px;color:#4e5660;font-size:13px;line-height:1.5}.empty-state{grid-column:1/-1;padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
-@media(max-width:1050px){.review-layout{grid-template-columns:1fr}.sticky-panel{position:static}}@media(max-width:720px){.field-cards{grid-template-columns:1fr}.review-hero,.review-actions{flex-direction:column;align-items:stretch}.metrics{grid-template-columns:repeat(2,1fr)}}
-
-.release-badge{display:inline-block;margin-left:.55rem;padding:.18rem .5rem;border-radius:999px;background:#e66a2c;color:#fff;font-size:.68rem;letter-spacing:.04em;vertical-align:middle}
+const $ = id => document.getElementById(id);
+const formatBytes = n => {
+  const units=['B','KB','MB','GB','TB']; let i=0,x=n;
+  while(x>=1024&&i<units.length-1){x/=1024;i++}
+  return `${x.toFixed(i<2?1:2)} ${units[i]}`;
+};
+async function api(path, options={}){
+  const res=await fetch(`${API_BASE}${path}`,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
+  if(!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  return res.json();
+}
+async function checkApi(){
+  try{await api('/health');$('apiStatus').textContent='Processing service online';$('apiStatus').className='api-status online'}
+  catch{$('apiStatus').textContent='Backend not configured — demo mode available';$('apiStatus').className='api-status offline'}
+}
+function renderFiles(){
+  $('fileList').innerHTML='';
+  selectedFiles.forEach((f,i)=>{
+    const row=document.createElement('div'); row.className='file-row'; row.dataset.index=i;
+    row.innerHTML=`<div class="file-head"><div><div class="file-name">${f.file.name}</div><div class="file-meta">${formatBytes(f.file.size)} • ${f.file.type||'unknown type'}</div></div><button class="secondary remove" data-index="${i}">Remove</button></div><div class="progress"><div style="width:${f.progress||0}%"></div></div><div class="file-status">${f.status||'Ready'}</div>`;
+    $('fileList').appendChild(row);
+  });
+  document.querySelectorAll('.remove').forEach(b=>b.onclick=()=>{selectedFiles.splice(+b.dataset.index,1);renderFiles();updateMetrics()});
+}
+function addFiles(files){
+  [...files].forEach(file=>{
+    const key=`${file.name}:${file.size}:${file.lastModified}`;
+    if(!selectedFiles.some(x=>x.key===key)) selectedFiles.push({key,file,progress:0,status:'Ready'});
+  });
+  renderFiles(); updateMetrics();
+}
+function updateFile(index, progress, status){
+  selectedFiles[index].progress=progress; selectedFiles[index].status=status; renderFiles();
+}
+function updateMetrics(){
+  $('fileCount').textContent=selectedFiles.length;
+  $('totalSize').textContent=formatBytes(selectedFiles.reduce((a,x)=>a+x.file.size,0));
+  $('uploadedSize').textContent=formatBytes(totalUploaded);
+}
+async function uploadFileCloud(item,index,projectId){
+  const file=item.file;
+  const init=await api('/uploads/init',{method:'POST',body:JSON.stringify({
+    project_id:projectId, filename:file.name, content_type:file.type||'application/octet-stream',
+    size:file.size, part_size:PART_SIZE
+  })});
+  const totalParts=Math.ceil(file.size/PART_SIZE), completed=[];
+  for(let part=1;part<=totalParts;part++){
+    const start=(part-1)*PART_SIZE,end=Math.min(start+PART_SIZE,file.size);
+    const signed=await api('/uploads/part-url',{method:'POST',body:JSON.stringify({
+      upload_id:init.upload_id, object_key:init.object_key, part_number:part
+    })});
+    const chunk=file.slice(start,end);
+    const put=await fetch(signed.url,{method:'PUT',body:chunk,headers:signed.headers||{}});
+    if(!put.ok) throw new Error(`Part ${part} failed`);
+    const etag=put.headers.get('etag')?.replaceAll('"','') || signed.mock_etag || `part-${part}`;
+    completed.push({part_number:part,etag});
+    totalUploaded += chunk.size;
+    updateFile(index,Math.round(end/file.size*100),`Uploaded part ${part} of ${totalParts}`);
+    updateMetrics();
+  }
+  await api('/uploads/complete',{method:'POST',body:JSON.stringify({
+    upload_id:init.upload_id, object_key:init.object_key, parts:completed, project_id:projectId, filename:file.name
+  })});
+  updateFile(index,100,'Uploaded');
+}
+async function demoUpload(item,index){
+  const file=item.file,totalParts=Math.ceil(file.size/PART_SIZE);
+  for(let part=1;part<=totalParts;part++){
+    await new Promise(r=>setTimeout(r,120));
+    const end=Math.min(part*PART_SIZE,file.size),prev=Math.min((part-1)*PART_SIZE,file.size);
+    totalUploaded += end-prev;
+    updateFile(index,Math.round(end/file.size*100),`Demo upload part ${part} of ${totalParts}`);
+    updateMetrics();
+  }
+  updateFile(index,100,'Uploaded in demo mode');
+}
+async function start(){
+  if(!selectedFiles.length){showStatus('Select at least one file.','error');return}
+  totalUploaded=0; updateMetrics(); $('jobState').textContent='Uploading'; setStage('upload');
+  const mode=$('uploadMode').value, project={
+    name:$('projectName').value||'Untitled PEMB Project',
+    customer:$('customerName').value,address:$('projectAddress').value,bid_due:$('bidDue').value
+  };
+  try{
+    let projectId='demo-project';
+    if(mode==='cloud'){
+      const created=await api('/projects',{method:'POST',body:JSON.stringify(project)});
+      projectId=created.project_id;
+    }
+    for(let i=0;i<selectedFiles.length;i++){
+      if(mode==='cloud') await uploadFileCloud(selectedFiles[i],i,projectId);
+      else await demoUpload(selectedFiles[i],i);
+    }
+    if(mode==='cloud'){
+      const job=await api('/jobs',{method:'POST',body:JSON.stringify({project_id:projectId})});
+      activeJob=job.job_id; $('jobState').textContent='Queued'; pollJob(activeJob);
+    }else{
+      $('jobState').textContent='Demo Complete'; setStage('upload',true); setStage('classify');
+      showStatus('Demo upload completed. Connect the backend and object storage to process the documents.','success');
+    }
+  }catch(e){console.error(e);$('jobState').textContent='Failed';showStatus(`Upload failed: ${e.message}`,'error')}
+}
+function setStage(name,done=false){
+  document.querySelectorAll('.stage').forEach(x=>x.classList.remove('active'));
+  const s=document.querySelector(`[data-stage="${name}"]`); if(s)s.classList.add(done?'done':'active');
+}
+function showStatus(text,type=''){const el=$('overallStatus');el.textContent=text;el.className=`analysis-status ${type}`}
+async function pollJob(id){
+  try{
+    const j=await api(`/jobs/${id}`); $('jobState').textContent=j.status;
+    const map={queued:'classify',classifying:'classify',ocr:'ocr',extracting:'extract',review_ready:'review',complete:'export'};
+    if(map[j.status])setStage(map[j.status],j.status==='complete');
+    if(['complete','review_ready','failed'].includes(j.status)){showStatus(j.message||`Job ${j.status}`,j.status==='failed'?'error':'success');refreshJobs();return}
+    setTimeout(()=>pollJob(id),2500);
+  }catch(e){showStatus(`Unable to read job status: ${e.message}`,'error')}
+}
+async function refreshJobs(){
+  try{
+    const data=await api('/jobs'); const box=$('jobs'); box.innerHTML=''; box.className='jobs';
+    if(!data.jobs.length){box.textContent='No jobs found.';box.className='jobs empty';return}
+    data.jobs.forEach(j=>{const c=document.createElement('div');c.className='job-card';c.innerHTML=`<div><div class="job-title">${j.project_name||j.project_id}</div><div class="job-details">${j.files||0} file(s) • ${j.created_at||''} • ${j.message||''}</div></div><div class="badge">${j.status}</div>`;box.appendChild(c)})
+  }catch{$('jobs').textContent='Backend unavailable.';$('jobs').className='jobs empty'}
+}
+const dz=$('dropzone'),fi=$('fileInput');
+fi.onchange=e=>addFiles(e.target.files);
+['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));
+dz.addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+$('clearFiles').onclick=()=>{selectedFiles=[];totalUploaded=0;renderFiles();updateMetrics();showStatus('')};
+$('startUpload').onclick=start;$('refreshJobs').onclick=refreshJobs;
+checkApi();updateMetrics();

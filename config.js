@@ -1,18 +1,22 @@
-# v1 Foundation
+# v1.1 Functional MVP
 
-This update replaces in-memory project storage with Neon PostgreSQL and introduces:
+## Testable workflow
+1. Create a persistent project.
+2. Open the project workspace.
+3. Select multiple source documents.
+4. Upload each file to Cloudflare R2 through multipart signed URLs.
+5. Save uploaded-file records in Neon PostgreSQL.
+6. Refresh/reopen the project and confirm the file list persists.
+7. Start a persistent processing job.
+8. Confirm the queued job remains visible after refresh.
 
-- persistent projects
-- uploaded-file model
-- processing-job model
-- extracted-field model
-- source page/sheet/excerpt fields
-- dashboard API
-- project dashboard frontend
-- database-aware health check
+## Not included yet
+The processing job is stored but not consumed by a worker. OCR, drawing vision, extracted fields, and Excel export are the next milestone.
 
-## Deployment
-1. Upload this repository update to GitHub.
-2. Render will auto-deploy if automatic deployments are enabled.
-3. Verify `/health` returns `database_configured: true` and version `1.0.0`.
-4. Deploy `frontend/` to Netlify or reconnect the Netlify site to this GitHub repository with publish directory `frontend`.
+## Important Cloudflare R2 configuration
+The R2 bucket needs a browser CORS policy allowing your Netlify origin to:
+- PUT
+- GET
+- HEAD
+
+and exposing the `ETag` response header.
