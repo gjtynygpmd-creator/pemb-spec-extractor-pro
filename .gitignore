@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Archives should not be committed to source control
+*.zip
+*.tar
+*.tar.gz
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local env files (never commit secrets)
+.env
+*.env
+!.env.example
+
+# Numbered duplicates created by web uploads, e.g. "README (1).md", "main (7).py"
+*([0-9]).*
+* ([0-9]).*

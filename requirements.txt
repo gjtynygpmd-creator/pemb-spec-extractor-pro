@@ -1,3 +1,0 @@
-{
-  "backend/tests/test_cors.py": true
-}

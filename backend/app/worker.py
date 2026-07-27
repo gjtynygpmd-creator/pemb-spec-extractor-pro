@@ -1,13 +1,12 @@
 from __future__ import annotations
+import gc
 import logging
 import os
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import fitz
-from PIL import Image
-import pytesseract
 from sqlalchemy import delete, select
 
 from app.db.session import Base, SessionLocal, engine
@@ -20,47 +19,21 @@ from app.models.project import (
     UploadedFile,
 )
 from app.services.document_analysis import (
-    classify_page, extract_fields, extract_spatial_fields, normalized_compare,
-    normalize_field_value, candidate_quality, meaningful_text_score, rich_text_layer,
+    classify_page,
+    extract_fields,
+    normalized_compare,
+    normalize_field_value,
+    candidate_quality,
+    page_has_rich_text_layer,
 )
+from app.services.vision_extraction import extract_from_page, vision_available
+from app.services import schema_loader
 from app.services.storage import get_s3
 from app.core.config import settings
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger("pemb-worker")
 POLL_SECONDS = int(os.getenv("WORKER_POLL_SECONDS", "8"))
-OCR_TIMEOUT_SECONDS = int(os.getenv("OCR_TIMEOUT_SECONDS", "35"))
-OCR_DPI = int(os.getenv("OCR_DPI", "140"))
-OCR_MAX_PIXELS = int(os.getenv("OCR_MAX_PIXELS", "12000000"))
-FORCE_DRAWING_OCR = os.getenv("FORCE_DRAWING_OCR", "false").lower() in {"1", "true", "yes"}
-
-
-
-def ocr_page_text(page: fitz.Page, dpi: int | None = None) -> str:
-    """OCR a low-signal PDF page with bounded CPU and memory use.
-
-    Large architectural sheets can become 25-40 MP images at 200+ DPI and can pin a
-    small Render worker for many minutes. v1.9.1 uses adaptive DPI, grayscale, a
-    pixel ceiling, and a hard Tesseract timeout so one sheet can never stall a job.
-    """
-    target_dpi = max(96, min(int(dpi or OCR_DPI), 180))
-    rect = page.rect
-    est_pixels = max(1.0, (rect.width / 72 * target_dpi) * (rect.height / 72 * target_dpi))
-    if est_pixels > OCR_MAX_PIXELS:
-        scale = (OCR_MAX_PIXELS / est_pixels) ** 0.5
-        target_dpi = max(96, int(target_dpi * scale))
-
-    pix = page.get_pixmap(dpi=target_dpi, colorspace=fitz.csGRAY, alpha=False)
-    image = Image.frombytes("L", (pix.width, pix.height), pix.samples)
-    try:
-        return (pytesseract.image_to_string(
-            image, config="--oem 1 --psm 11", timeout=OCR_TIMEOUT_SECONDS
-        ) or "").strip()
-    except RuntimeError as exc:
-        # pytesseract raises RuntimeError on timeout. Treat OCR as optional and let
-        # native/spatial extraction continue rather than failing the whole project.
-        log.warning("OCR timed out after %ss: %s", OCR_TIMEOUT_SECONDS, exc)
-        return ""
 
 
 def event(db, job, stage: str, progress: int, message: str):
@@ -69,6 +42,60 @@ def event(db, job, stage: str, progress: int, message: str):
     job.message = message
     db.add(ProcessingEvent(project_id=job.project_id, job_id=job.id, stage=stage, progress=progress, message=message))
     db.commit()
+
+
+def heartbeat(db, job, progress: int, message: str):
+    """Lightweight progress update: touches the job row (so updated_at advances as a
+    liveness signal) and commits, but does not add a ProcessingEvent row. Called every
+    page so the UI advances smoothly and the recovery sweep can tell the worker is alive.
+    """
+    job.stage = "inspecting"
+    job.progress = progress
+    job.message = message
+    db.commit()
+
+
+def recover_stuck_jobs():
+    """Re-queue or fail jobs left in 'processing' by a worker that died mid-job.
+
+    An OOM kill or platform timeout terminates the process without running the
+    except handler, so the job never leaves 'processing'. Without this sweep it would
+    sit at its last progress (for example 18%) forever. Here, any processing job whose
+    heartbeat is older than worker_stale_seconds is retried, or marked failed once it
+    has exhausted worker_max_attempts.
+    """
+    cutoff = datetime.utcnow() - timedelta(seconds=settings.worker_stale_seconds)
+    with SessionLocal() as db:
+        stale = db.scalars(
+            select(ProcessingJob)
+            .where(ProcessingJob.status == "processing", ProcessingJob.updated_at < cutoff)
+            .with_for_update(skip_locked=True)
+        ).all()
+        for job in stale:
+            project = db.get(Project, job.project_id)
+            if (job.attempts or 0) >= settings.worker_max_attempts:
+                job.status = "failed"
+                job.stage = "failed"
+                job.error_message = (
+                    "Worker stopped responding mid-analysis (likely out of memory on a "
+                    "large drawing set). Try a smaller upload or a larger worker plan."
+                )
+                job.message = job.error_message
+                if project:
+                    project.status = "analysis_failed"
+                db.add(ProcessingEvent(
+                    project_id=job.project_id, job_id=job.id, stage="failed",
+                    progress=job.progress or 0, message=job.message,
+                ))
+                log.warning("Job %s failed after %s attempt(s): stale/stuck", job.id, job.attempts)
+            else:
+                job.status = "queued"
+                job.stage = "requeued"
+                job.message = "Recovered a stalled analysis job; retrying"
+                if project:
+                    project.status = "processing"
+                log.warning("Job %s re-queued after stall (attempt %s)", job.id, job.attempts)
+        db.commit()
 
 
 def claim_job():
@@ -123,8 +150,16 @@ def process_job(job_id: str):
             all_candidates: dict[str, list[dict]] = {}
             total_pages = 0
             searchable_pages = 0
+            vision_pages = 0
+            vision_calls = 0
             ocr_pages = 0
             processed_files = 0
+            vision_ready = vision_available()
+            event(
+                db, job, "downloading", 6,
+                "Vision extraction is available" if vision_ready
+                else "Vision extraction is off (no API key or disabled); drawings will be flagged for review",
+            )
 
             for file_index, source in enumerate(files):
                 if (source.content_type or "").lower() != "application/pdf" and not source.filename.lower().endswith(".pdf"):
@@ -143,87 +178,107 @@ def process_job(job_id: str):
                     db.commit()
 
                     for index in range(page_count):
-                        page = document.load_page(index)
-                        text = page.get_text("text") or ""
-                        text = text.strip()
-                        # Preserve block-level reading order for schedules, notes, and dimension callouts.
-                        blocks = page.get_text("blocks") or []
-                        blocks_text = "\n".join(
-                            str(block[4]).strip() for block in sorted(blocks, key=lambda b: (round(b[1] / 18), b[0]))
-                            if len(block) > 4 and str(block[4]).strip()
-                        )
-                        text_score = meaningful_text_score(text)
-                        is_searchable = rich_text_layer(text)
-                        initial_page_type, initial_division, initial_sheet, initial_title = classify_page(text)
-                        drawing_ocr_types = {
-                            "structural_notes", "roof_plan", "foundation_plan", "framing_plan",
-                            "floor_plan", "elevation", "wall_section", "door_schedule",
-                        }
-                        # OCR is now a bounded fallback, not an automatic second pass on every
-                        # drawing. Rich born-digital sheets already provide text blocks and
-                        # coordinates; OCRing 22x34 sheets on a small cloud CPU was the cause of
-                        # jobs appearing frozen at the first drawing page.
-                        low_signal = not is_searchable
-                        use_ocr_assist = low_signal or (FORCE_DRAWING_OCR and initial_page_type in drawing_ocr_types)
-                        searchable_pages += int(is_searchable)
-                        ocr_pages += int(use_ocr_assist)
-
-                        # Never discard a low-signal page. OCR it and combine the result with
-                        # embedded text. For drawing sheets this acts as a second reading of the page.
-                        ocr_text = ""
-                        if use_ocr_assist:
-                            try:
-                                ocr_text = ocr_page_text(page)
-                            except Exception as ocr_exc:
-                                log.warning("OCR failed for %s page %s: %s", source.filename, index + 1, ocr_exc)
-                        analysis_text = text
-                        if ocr_text:
-                            analysis_text = (text + "\n--- OCR ASSIST ---\n" + ocr_text).strip()
-
-                        page_type, division, sheet_number, sheet_title = classify_page(analysis_text)
-                        if page_type == "unclassified" and initial_page_type != "unclassified":
-                            page_type, division, sheet_number, sheet_title = initial_page_type, initial_division, initial_sheet, initial_title
-                        db.add(DocumentPage(
-                            project_id=job.project_id,
-                            uploaded_file_id=source.id,
-                            page_number=index + 1,
-                            sheet_number=sheet_number,
-                            sheet_title=sheet_title,
-                            page_type=page_type,
-                            spec_division=division,
-                            searchable_text=is_searchable,
-                            ocr_required=low_signal,
-                            text_length=len(analysis_text),
-                            text_excerpt=analysis_text[:4000] if analysis_text else None,
-                        ))
-
-                        # Fast text/spec path plus coordinate-aware drawing path. OCR text is
-                        # routed through the same value validation pipeline instead of being skipped.
-                        page_candidates = extract_fields(
-                            analysis_text, page_type=page_type, division=division, blocks_text=blocks_text or analysis_text
-                        )
-                        page_candidates.extend(extract_spatial_fields(blocks, page_type=page_type, division=division))
-                        page_seen = set()
-                        for candidate in page_candidates:
-                            key = (candidate.get("field_name"), normalized_compare(candidate.get("value", ""), candidate.get("field_name")))
-                            if key in page_seen:
-                                continue
-                            page_seen.add(key)
-                            candidate.update({
-                                "source_file": source.filename,
-                                "source_page": index + 1,
-                                "source_sheet": sheet_number,
-                                "page_type": page_type,
-                                "division": division,
-                            })
-                            all_candidates.setdefault(candidate["field_name"], []).append(candidate)
-
                         current_page = index + 1
+                        try:
+                            page = document.load_page(index)
+                            text = page.get_text("text") or ""
+                            text = text.strip()
+                            # Cap pathological pages so regex and memory can't spike.
+                            if len(text) > settings.page_text_char_cap:
+                                text = text[: settings.page_text_char_cap]
+                            # Preserve block-level reading order for schedules, notes, and dimension callouts.
+                            blocks = page.get_text("blocks") or []
+                            blocks_text = "\n".join(
+                                str(block[4]).strip() for block in sorted(blocks, key=lambda b: (round(b[1] / 18), b[0]))
+                                if len(block) > 4 and str(block[4]).strip()
+                            )
+                            if len(blocks_text) > settings.page_text_char_cap:
+                                blocks_text = blocks_text[: settings.page_text_char_cap]
+                            page_type, division, sheet_number, sheet_title = classify_page(text)
+                            has_rich_text = page_has_rich_text_layer(
+                                text,
+                                settings.text_layer_min_chars,
+                                settings.text_layer_min_labels,
+                            )
+
+                            # Routing:
+                            #   rich text layer  -> fast regex path (spec manuals, structural notes)
+                            #   otherwise        -> vision path (drawings, scanned, image-only)
+                            #   vision unusable  -> flag for OCR/manual review, never silently drop
+                            page_candidates: list[dict] = []
+                            if has_rich_text:
+                                extraction_method = "text"
+                                searchable_pages += 1
+                                page_candidates = extract_fields(
+                                    text, page_type=page_type, division=division, blocks_text=blocks_text
+                                )
+                            elif vision_ready and vision_calls < settings.vision_max_pages_per_job:
+                                vision_calls += 1
+                                vision = extract_from_page(page)
+                                if vision.used and vision.candidates:
+                                    extraction_method = "vision"
+                                    vision_pages += 1
+                                    page_candidates = vision.candidates
+                                else:
+                                    extraction_method = "needs_ocr"
+                                    ocr_pages += 1
+                            else:
+                                extraction_method = "needs_ocr"
+                                ocr_pages += 1
+
+                            db.add(DocumentPage(
+                                project_id=job.project_id,
+                                uploaded_file_id=source.id,
+                                page_number=current_page,
+                                sheet_number=sheet_number,
+                                sheet_title=sheet_title,
+                                page_type=page_type,
+                                spec_division=division,
+                                searchable_text=has_rich_text,
+                                ocr_required=(extraction_method == "needs_ocr"),
+                                text_length=len(text),
+                                text_excerpt=text[:4000] if text else None,
+                            ))
+
+                            for candidate in page_candidates:
+                                # Reconcile to the canonical schema so text-path and
+                                # vision-path results merge under one field name/category.
+                                fld = schema_loader.resolve(candidate.get("field_name", ""))
+                                if fld:
+                                    candidate["field_name"] = fld.name
+                                    candidate["category"] = fld.category
+                                candidate.update({
+                                    "source_file": source.filename,
+                                    "source_page": current_page,
+                                    "source_sheet": sheet_number,
+                                })
+                                all_candidates.setdefault(candidate["field_name"], []).append(candidate)
+                        except Exception as page_exc:
+                            # Isolate per-page failures: record the page and continue rather
+                            # than letting one bad sheet abort the whole job.
+                            log.warning("Page %s of %s failed: %s", current_page, source.filename, page_exc)
+                            db.add(DocumentPage(
+                                project_id=job.project_id,
+                                uploaded_file_id=source.id,
+                                page_number=current_page,
+                                page_type="error",
+                                searchable_text=False,
+                                ocr_required=True,
+                                text_length=0,
+                                text_excerpt=None,
+                            ))
+                            ocr_pages += 1
+                        finally:
+                            page = None
+
                         progress = 18 + int(((file_index + current_page / max(page_count, 1)) / max(len(files), 1)) * 62)
+                        # Heartbeat every page (smooth progress + liveness); full event every 10.
                         if current_page == 1 or current_page % 10 == 0 or current_page == page_count:
                             event(db, job, "inspecting", min(progress, 80), f"Inspecting {source.filename}: page {current_page} of {page_count}")
-                        elif current_page % 4 == 0:
-                            db.commit()
+                        else:
+                            heartbeat(db, job, min(progress, 80), f"Inspecting {source.filename}: page {current_page} of {page_count}")
+                        if current_page % 25 == 0:
+                            gc.collect()
                     document.close()
                     source.status = "inspected"
                     processed_files += 1
@@ -286,7 +341,7 @@ def process_job(job_id: str):
             job.completed_at = datetime.utcnow()
             job.message = (
                 f"Inspected {processed_files} PDF(s), {total_pages} page(s); "
-                f"{searchable_pages} rich-text, {ocr_pages} OCR-assisted; "
+                f"{searchable_pages} via text, {vision_pages} via vision, {ocr_pages} need OCR/review; "
                 f"{field_count} field(s), {conflict_count} conflict(s)"
             )
             project.status = "review_ready"
@@ -306,8 +361,12 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.9.1 Document Intelligence Engine started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.9.4 Hardened Schema-Driven started; poll interval=%ss", POLL_SECONDS)
     while True:
+        try:
+            recover_stuck_jobs()
+        except Exception:
+            log.exception("Stuck-job recovery sweep failed")
         job_id = claim_job()
         if job_id:
             process_job(job_id)
