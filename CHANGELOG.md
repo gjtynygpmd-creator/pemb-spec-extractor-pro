@@ -1,3 +1,28 @@
+## v1.9.5 - Full-Schema Extraction + UI trim
+
+Addresses "partial data" on text-based specs and fixes two wrong-value bugs.
+
+- Text pages now also use vision. Previously a page with a good text layer went to the
+  regex path only, and regex has rules for ~30 of the 90 schema fields, so the other ~60
+  (panel types, insulation sub-fields, seismic spectra, doors/windows, serviceability,
+  commercial) were never extracted on spec sheets. Rich-text pages now run regex AND the
+  vision model, merged, covering the full schema. Toggle with VISION_SUPPLEMENTS_TEXT
+  (default true); it respects the per-job vision cap.
+- Fixed Site Class / SDC / Wind Exposure returning a wrong letter. The rules used a greedy
+  non-digit skip that jumped past the correct adjacent letter (e.g. Site Class "D" read as
+  "C") to a letter in a later word. They now bind to the letter immediately following the
+  label.
+- Fixed accessories (Gutters, Ridge Vents, Roof Curbs, Framed Openings) reading "Excluded"
+  when actually included. The "by others" exclude trigger bled in from neighboring scope
+  lines like "Anchor Bolts By: By Others" and was removed.
+- Removed the Bid Readiness / Missing Information panel from the project screen. The
+  "Missing Items" and "Review Complete" stat cards are unaffected; the panel's DOM writes
+  are now null-guarded.
+
+Note: because text pages now call the vision model, OpenAI usage increases (still cents
+per sheet with gpt-4o). Set VISION_SUPPLEMENTS_TEXT=false to revert to regex-only on text
+pages.
+
 ## v1.9.4 - Hardening (timeouts, hang guard) + clean repo
 
 Closes the remaining robustness gaps from the live diagnostic and ships as a clean tree.

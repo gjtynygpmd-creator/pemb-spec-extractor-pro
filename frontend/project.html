@@ -5,7 +5,7 @@
 <title>PEMB Estimator Review</title><link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header><div><div class="eyebrow">PEMB ESTIMATOR • v1.9.4 HARDENED SCHEMA-DRIVEN</div><h1 id="projectTitle">Project Workspace</h1><p id="projectSubtitle">Loading project…</p></div><div><a class="button secondary" href="index.html">All Projects</a></div></header>
+<header><div><div class="eyebrow">PEMB ESTIMATOR • v1.9.5 FULL-SCHEMA EXTRACTION</div><h1 id="projectTitle">Project Workspace</h1><p id="projectSubtitle">Loading project…</p></div><div><a class="button secondary" href="index.html">All Projects</a></div></header>
 <main>
 <section class="metrics">
 <div class="metric"><span id="fileCount">0</span><small>Uploaded Files</small></div>
@@ -23,14 +23,11 @@
 <div class="review-actions"><button id="exportXlsx">Export Excel</button><button id="exportCsv" class="secondary">Export CSV</button><button id="exportZoho" class="secondary">Export Zoho CSV</button><button id="exportPdf" class="secondary">Export PDF</button><select id="categoryFilter"><option value="">All categories</option></select><select id="statusFilter"><option value="">All statuses</option><option value="review">Needs review</option><option value="accepted">Accepted</option><option value="conflict">Conflict</option></select></div>
 </section>
 
-<section class="review-layout">
+<section>
 <div class="panel">
 <div class="toolbar"><div><h2>Project Data</h2><p class="muted">Source-backed PEMB estimating fields.</p></div><button id="refreshBtn" class="secondary">Refresh</button></div>
 <div id="fieldCards" class="field-cards"></div>
 </div>
-<aside>
-<section class="panel sticky-panel"><h2>Bid Readiness</h2><div id="readinessBar" class="readiness-bar"><div></div></div><p id="readinessText" class="muted"></p><h3>Missing Information</h3><div id="missingList" class="checklist"></div><h3>Conflicts</h3><div id="conflictList" class="checklist"></div></section>
-</aside>
 </section>
 
 <section class="panel">

@@ -441,7 +441,10 @@ def _canonical_scope_value(field_name: str, value: str, excerpt: str = "") -> st
     """Convert narrative scope language into short estimator-ready values."""
     context = normalize_space(f"{value} {excerpt}")
     low = context.lower()
-    if re.search(r"\b(?:exclude|excluded|not\s+included|by\s+others|not\s+in\s+contract)\b", low):
+    # Note: "by others" was intentionally removed as an exclude trigger. It bleeds in
+    # from neighboring scope lines (e.g. "Anchor Bolts By: By Others") and produced false
+    # "Excluded" values for accessories that were actually included.
+    if re.search(r"\b(?:excluded?|not\s+included|not\s+in\s+contract|omit(?:ted)?)\b", low):
         return "Excluded"
     if re.search(r"\b(?:provide|furnish|install|include|included|required|by\s+pemb|pemb\s+(?:manufacturer|supplier))\b", low):
         # Preserve a useful size/gauge when one is explicitly tied to the field.
@@ -694,10 +697,10 @@ def _extract_design_criteria(text: str) -> list[dict]:
         ("Codes & Loads", "Roof Snow Load", r"(?:FLAT\s+ROOF\s+SNOW\s+LOAD|ROOF\s+SNOW\s+LOAD|P\s*F)\D{0,35}(\d+(?:\.\d+)?)\s*PSF", 0.96),
         ("Codes & Loads", "Roof Live Load", r"ROOF\s+LIVE\s+LOAD\D{0,35}(\d+(?:\.\d+)?)\s*PSF", 0.96),
         ("Codes & Loads", "Basic Wind Speed", r"(?:WIND\s+SPEED(?:\s*\(3\s*SECOND\s*GUST\))?|V\s*ULT)\D{0,40}(\d{2,3})\s*MPH", 0.97),
-        ("Codes & Loads", "Wind Exposure", r"(?:WIND\s+EXPOSURE|EXPOSURE\s+CATEGORY)\D{0,20}([BCD])\b", 0.94),
+        ("Codes & Loads", "Wind Exposure", r"(?:WIND\s+EXPOSURE|EXPOSURE\s+CATEGORY)[\s:=\-–—]*([BCD])\b", 0.94),
         ("Codes & Loads", "Risk Category", r"RISK\s+CATEGORY\s*[:=\-]?\s*(IV|III|II|I|[1-4])\b", 0.95),
-        ("Codes & Loads", "Site Class", r"SITE\s+CLASS\D{0,20}([A-F])\b", 0.94),
-        ("Codes & Loads", "Seismic Design Category", r"SEISMIC\s+DESIGN\s+CATEGORY\D{0,20}([A-F])\b", 0.97),
+        ("Codes & Loads", "Site Class", r"SITE\s+CLASS[\s:=\-–—]*([A-F])\b", 0.94),
+        ("Codes & Loads", "Seismic Design Category", r"SEISMIC\s+DESIGN\s+CATEGORY[\s:=\-–—]*([A-F])\b", 0.97),
         ("Codes & Loads", "Ss", r"(?:MAPPED\s+SPECTRAL\s+ACCELERATION\D{0,30})?S\s*S\s*[:=]?\s*(0?\.\d+)", 0.94),
         ("Codes & Loads", "S1", r"(?:\bS\s*1\b|\$\s*1)\s*[:=]?\s*(0?\.\d+)", 0.93),
         ("Codes & Loads", "Snow Exposure Factor", r"(?:SNOW\s+)?EXPOSURE\s+FACTOR\D{0,20}(\d+(?:\.\d+)?)", 0.91),

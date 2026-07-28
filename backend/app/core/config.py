@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     # (as opposed to an exception) is not caught by try/except; this bounds it so the
     # job moves on and the page is flagged for review.
     page_timeout_seconds: int = 120
+    # When a page has a rich text layer, the fast regex path runs. The regex rules cover
+    # only the core fields, so when this is on the page is ALSO sent to the vision model
+    # to fill the many schema fields regex does not handle (panel types, insulation
+    # sub-fields, seismic spectra, openings, serviceability, commercial). Set false to
+    # save API cost and rely on regex alone for text pages.
+    vision_supplements_text: bool = True
 
     class Config:
         env_file = ".env"

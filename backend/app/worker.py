@@ -212,6 +212,16 @@ def process_job(job_id: str):
                                 page_candidates = extract_fields(
                                     text, page_type=page_type, division=division, blocks_text=blocks_text
                                 )
+                                # Regex covers only the core fields. Supplement with vision so
+                                # the many schema fields without regex rules are also captured.
+                                if (settings.vision_supplements_text and vision_ready
+                                        and vision_calls < settings.vision_max_pages_per_job):
+                                    vision_calls += 1
+                                    vsup = extract_from_page(page)
+                                    if vsup.used and vsup.candidates:
+                                        extraction_method = "text+vision"
+                                        vision_pages += 1
+                                        page_candidates = page_candidates + vsup.candidates
                             elif vision_ready and vision_calls < settings.vision_max_pages_per_job:
                                 vision_calls += 1
                                 vision = extract_from_page(page)
@@ -361,7 +371,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.9.4 Hardened Schema-Driven started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.9.5 Full-Schema Extraction started; poll interval=%ss", POLL_SECONDS)
     while True:
         try:
             recover_stuck_jobs()
