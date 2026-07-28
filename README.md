@@ -1,4 +1,4 @@
-# PEMB Spec Extractor Pro v1.9.5 Full-Schema Extraction
+# PEMB Spec Extractor Pro v1.9.6 Polished
 
 ## Insulation Core Release
 

@@ -263,7 +263,7 @@
     },
     {
       "field_id": "jurisdiction_ahj",
-      "name": "Jurisdiction / AHU",
+      "name": "Jurisdiction / AHJ",
       "category": "Project & Bid Info",
       "type": "string",
       "unit": null,
@@ -1075,8 +1075,8 @@
       "unit": null,
       "allowed_values": [
         "ASCE 7-10",
-        "7-16",
-        "7-22"
+        "ASCE 7-16",
+        "ASCE 7-22"
       ],
       "format": null,
       "example": "ASCE 7-16",

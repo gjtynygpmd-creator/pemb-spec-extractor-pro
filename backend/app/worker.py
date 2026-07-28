@@ -122,6 +122,20 @@ def claim_job():
         return job.id
 
 
+def _has_real_conflict(normalized_values) -> bool:
+    """True only if two values genuinely disagree. Values where one contains the other
+    after normalization (e.g. "clearspan" vs "clearspanrigidframe", "24ga" vs "24") are
+    treated as agreement, not a conflict. This stops the regex and vision paths from
+    flagging the same fact as a conflict just because one is more verbose."""
+    vals = [v for v in normalized_values if v]
+    for i in range(len(vals)):
+        for j in range(i + 1, len(vals)):
+            a, b = vals[i], vals[j]
+            if a not in b and b not in a:
+                return True
+    return False
+
+
 def process_job(job_id: str):
     s3 = get_s3()
     with SessionLocal() as db:
@@ -295,6 +309,14 @@ def process_job(job_id: str):
                     db.commit()
 
             event(db, job, "extracting_fields", 84, "Consolidating source-backed PEMB fields")
+            # Drop generic regex fields when the specific schema fields are present, so a
+            # sheet with BSW/FSW eave heights or front/back slopes doesn't also list a
+            # redundant generic "Eave Height" / "Roof Slope" row.
+            if any(k in all_candidates for k in ("BSW Eave Height", "FSW Eave Height")):
+                all_candidates.pop("Eave Height", None)
+            if any(k in all_candidates for k in ("Roof Slope - Front", "Roof Slope - Back")):
+                all_candidates.pop("Roof Slope", None)
+
             for field_name, candidates in all_candidates.items():
                 if field_name in manual_names:
                     continue
@@ -305,15 +327,15 @@ def process_job(job_id: str):
                 )
                 best = ranked[0]
                 best_score = best.get("quality_score", candidate_quality(best))
-                # Conflict only when two clean, materially different values have comparable authority.
-                # Narrative scope statements normalize to Included/Excluded/Specified and no longer conflict.
+                # Conflict only when two clean values genuinely disagree (neither contains
+                # the other after normalization) with comparable authority.
                 credible = [
                     c for c in ranked
                     if c.get("quality_score", candidate_quality(c)) >= max(0.80, best_score - 0.04)
                     and c["confidence"] >= 0.80
                 ]
                 unique_values = {normalized_compare(c["value"], field_name) for c in credible if c.get("value")}
-                status = "conflict" if len(unique_values) > 1 else "review"
+                status = "conflict" if _has_real_conflict(unique_values) else "review"
                 db.add(ExtractedField(
                     project_id=job.project_id,
                     category=best["category"],
@@ -344,7 +366,7 @@ def process_job(job_id: str):
                     and x.get('quality_score', candidate_quality(x)) >= max(0.80, best_score - 0.04)
                     and x['confidence'] >= 0.80
                 }
-                conflict_count += int(len(values) > 1)
+                conflict_count += int(_has_real_conflict(values))
             job.status = "completed"
             job.stage = "completed"
             job.progress = 100
@@ -371,7 +393,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.9.5 Full-Schema Extraction started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.9.6 Polish started; poll interval=%ss", POLL_SECONDS)
     while True:
         try:
             recover_stuck_jobs()

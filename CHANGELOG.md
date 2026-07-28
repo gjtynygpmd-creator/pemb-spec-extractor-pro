@@ -1,3 +1,22 @@
+## v1.9.6 - Polish pass (from sample-sheet review)
+
+Cleans up the issues found reviewing the sample-sheet export. Extraction accuracy was
+already correct; these are label, coercion, and conflict-noise fixes.
+
+- ASCE 7 Edition no longer stored as "7-16" (which spreadsheets render as a date like
+  "16-Jul"). The enum allowed-values were malformed ("ASCE 7-10; 7-16; 7-22"), so
+  coercion stripped the "ASCE" prefix. Now "ASCE 7-10; ASCE 7-16; ASCE 7-22", and
+  "ASCE 7-16" is preserved intact.
+- Fixed a schema label typo: "Jurisdiction / AHU" is now "Jurisdiction / AHJ".
+- Redundant generic fields removed: when the specific schema fields are present
+  (BSW/FSW Eave Height, Roof Slope Front/Back), the generic "Eave Height" and
+  "Roof Slope" rows are dropped so they no longer duplicate under a separate category.
+- Conflict detection now treats compatible values as agreement. Previously "Clear Span"
+  vs "Clear Span (Rigid Frame)" from the regex and vision paths counted as a conflict;
+  now a value that contains the other after normalization is not flagged. Genuinely
+  different values (e.g. 24 ga vs 26 ga) still conflict.
+
+Schema files updated (backend/app/data/pemb_field_schema.json and schema/).
 ## v1.9.5 - Full-Schema Extraction + UI trim
 
 Addresses "partial data" on text-based specs and fixes two wrong-value bugs.
