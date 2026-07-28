@@ -1,3 +1,24 @@
+## v1.9.7 - Vision prioritization for large documents
+
+Makes the tool find the pages that matter in big, mixed documents.
+
+- Vision budget prioritization. Pages that look like pre-engineered-metal-building
+  content (metal building, 13 34 19, rigid frame, design criteria, eave, wind/snow,
+  panels, purlins/girts, etc.) are now guaranteed a vision read regardless of where they
+  sit in the document. Previously the per-job vision budget was spent front-to-back, so a
+  design-criteria sheet late in a large set (e.g. Section 13 34 19 at page 410 of 417, or
+  a design table near the end of a big drawing set) got starved and read by regex only.
+  Off-topic pages still respect VISION_MAX_PAGES_PER_JOB.
+- Relabeled the "Need OCR" stat to "No Fields Found". On text documents no pages are
+  image-only; that counter really means "processed but no PEMB fields on the page", which
+  is expected for the many non-metal-building pages in a combined spec book.
+- Precision fix: bare accessory presence hits (Gutters/Downspouts/etc. read as
+  "Specified") are dropped on off-topic pages, so a mention in an unrelated paragraph
+  (e.g. a janitorial cleaning list) no longer posts a spurious field.
+
+Note: this does not add fields that are not in a document. An architectural spec book
+that lacks the numeric design criteria will still yield only what it contains; the design
+values live in the structural drawings / design-criteria schedule.
 ## v1.9.6 - Polish pass (from sample-sheet review)
 
 Cleans up the issues found reviewing the sample-sheet export. Extraction accuracy was

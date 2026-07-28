@@ -68,6 +68,19 @@ def test_drawing_routes_to_vision_not_regex():
     assert fails_length or fails_labels
 
 
+def test_pemb_relevance_prioritization():
+    from app.services.document_analysis import page_is_pemb_relevant
+    # A page about the metal building / design criteria is relevant (guaranteed vision).
+    assert page_is_pemb_relevant(
+        "SECTION 13 34 19 METAL BUILDING SYSTEMS. Primary Framing: Rigid frame."
+    ) is True
+    assert page_is_pemb_relevant("Basic Wind Speed 115 mph, Ground Snow Load 30 psf") is True
+    # An off-topic page (e.g. janitorial cleaning) is not relevant.
+    assert page_is_pemb_relevant(
+        "Clean debris from roofs, gutters, downspouts, and drainage systems. Sweep paved areas."
+    ) is False
+
+
 if __name__ == "__main__":
     test_spec_page_extracts_and_is_rich()
     test_eave_height_not_misread_as_wind_speed()

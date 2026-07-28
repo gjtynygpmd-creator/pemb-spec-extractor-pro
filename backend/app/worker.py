@@ -25,6 +25,7 @@ from app.services.document_analysis import (
     normalize_field_value,
     candidate_quality,
     page_has_rich_text_layer,
+    page_is_pemb_relevant,
 )
 from app.services.vision_extraction import extract_from_page, vision_available
 from app.services import schema_loader
@@ -218,7 +219,14 @@ def process_job(job_id: str):
                             # Routing:
                             #   rich text layer  -> fast regex path (spec manuals, structural notes)
                             #   otherwise        -> vision path (drawings, scanned, image-only)
-                            #   vision unusable  -> flag for OCR/manual review, never silently drop
+                            #   vision unusable  -> flag for review, never silently drop
+                            # PEMB-relevant pages are guaranteed a vision read regardless of
+                            # position, so a design-criteria sheet late in a large set is not
+                            # starved by the per-job budget being spent on earlier pages.
+                            relevant = page_is_pemb_relevant(text)
+                            vision_allowed = vision_ready and (
+                                relevant or vision_calls < settings.vision_max_pages_per_job
+                            )
                             page_candidates: list[dict] = []
                             if has_rich_text:
                                 extraction_method = "text"
@@ -226,17 +234,25 @@ def process_job(job_id: str):
                                 page_candidates = extract_fields(
                                     text, page_type=page_type, division=division, blocks_text=blocks_text
                                 )
+                                # On off-topic pages, drop bare accessory presence hits
+                                # (e.g. "gutters, downspouts" appearing in a cleaning
+                                # paragraph) that would otherwise post a spurious field.
+                                if not relevant:
+                                    page_candidates = [
+                                        c for c in page_candidates
+                                        if not (c.get("category") == "Openings & Accessories"
+                                                and c.get("value") in ("Specified", "Included", "Excluded"))
+                                    ]
                                 # Regex covers only the core fields. Supplement with vision so
                                 # the many schema fields without regex rules are also captured.
-                                if (settings.vision_supplements_text and vision_ready
-                                        and vision_calls < settings.vision_max_pages_per_job):
+                                if settings.vision_supplements_text and vision_allowed:
                                     vision_calls += 1
                                     vsup = extract_from_page(page)
                                     if vsup.used and vsup.candidates:
                                         extraction_method = "text+vision"
                                         vision_pages += 1
                                         page_candidates = page_candidates + vsup.candidates
-                            elif vision_ready and vision_calls < settings.vision_max_pages_per_job:
+                            elif vision_allowed:
                                 vision_calls += 1
                                 vision = extract_from_page(page)
                                 if vision.used and vision.candidates:
@@ -244,10 +260,10 @@ def process_job(job_id: str):
                                     vision_pages += 1
                                     page_candidates = vision.candidates
                                 else:
-                                    extraction_method = "needs_ocr"
+                                    extraction_method = "no_fields"
                                     ocr_pages += 1
                             else:
-                                extraction_method = "needs_ocr"
+                                extraction_method = "no_fields"
                                 ocr_pages += 1
 
                             db.add(DocumentPage(
@@ -259,7 +275,7 @@ def process_job(job_id: str):
                                 page_type=page_type,
                                 spec_division=division,
                                 searchable_text=has_rich_text,
-                                ocr_required=(extraction_method == "needs_ocr"),
+                                ocr_required=(extraction_method == "no_fields"),
                                 text_length=len(text),
                                 text_excerpt=text[:4000] if text else None,
                             ))
@@ -373,7 +389,7 @@ def process_job(job_id: str):
             job.completed_at = datetime.utcnow()
             job.message = (
                 f"Inspected {processed_files} PDF(s), {total_pages} page(s); "
-                f"{searchable_pages} via text, {vision_pages} via vision, {ocr_pages} need OCR/review; "
+                f"{searchable_pages} via text, {vision_pages} via vision, {ocr_pages} with no fields; "
                 f"{field_count} field(s), {conflict_count} conflict(s)"
             )
             project.status = "review_ready"
@@ -393,7 +409,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.9.6 Polish started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.9.7 Vision Prioritization started; poll interval=%ss", POLL_SECONDS)
     while True:
         try:
             recover_stuck_jobs()

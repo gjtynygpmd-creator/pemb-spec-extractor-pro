@@ -568,6 +568,33 @@ def page_has_rich_text_layer(text: str, min_chars: int = 200, min_labels: int = 
     return count_rich_text_labels(text) >= min_labels
 
 
+# Strong signals that a page is about the pre-engineered metal building itself. A single
+# strong hit, or two weaker ones, marks a page as PEMB-relevant so it is guaranteed a
+# vision read even when it sits at the end of a large document and the per-job vision
+# budget for ordinary pages is already spent.
+_PEMB_STRONG = (
+    r"metal\s+building", r"pre-?engineered", r"13\s*[-\s]?\s*34\s*[-\s]?\s*19", r"13-?3419",
+    r"rigid\s+frame", r"clear\s+span", r"design\s+criteria", r"design\s+loads",
+    r"basic\s+wind\s+speed", r"ground\s+snow", r"roof\s+snow", r"collateral\s+load",
+    r"risk\s+category", r"seismic\s+design\s+category", r"eave\s+height", r"standing\s+seam",
+)
+_PEMB_WEAK = (
+    r"\bpurlin", r"\bgirt", r"roof\s+panel", r"wall\s+panel", r"\beave\b", r"\bridge\b",
+    r"roof\s+slope", r"wind\s+exposure", r"snow\s+load", r"\bgauge\b|\bga\b", r"insulation",
+    r"building\s+code", r"framed\s+opening", r"bay\s+spacing", r"anchor\s+bolt",
+)
+
+
+def page_is_pemb_relevant(text: str) -> bool:
+    """True if the page likely contains pre-engineered-metal-building content worth a
+    vision read. Used to prioritize the vision budget toward the sheets that matter."""
+    if not text:
+        return False
+    if any(re.search(p, text, re.I) for p in _PEMB_STRONG):
+        return True
+    return sum(1 for p in _PEMB_WEAK if re.search(p, text, re.I)) >= 2
+
+
 def extract_fields(text: str, page_type: str | None = None, division: str | None = None, blocks_text: str | None = None) -> list[dict]:
     # Search both original text and a line-normalized copy. The second form helps
     # when PDF extraction inserts line breaks between labels and values.
