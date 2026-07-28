@@ -1,4 +1,4 @@
-# PEMB Spec Extractor Pro v1.9.7 Vision Prioritization
+# PEMB Spec Extractor Pro v1.9.8 Drawing Accuracy
 
 ## Insulation Core Release
 

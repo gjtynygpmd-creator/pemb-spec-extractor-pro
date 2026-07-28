@@ -1,3 +1,29 @@
+## v1.9.8 - Drawing accuracy (from the drawings-set review)
+
+Recovers design values that were present in the drawings but missed, and fixes cases
+where a confident vision misread beat a correct regex value.
+
+- Design-criteria extraction now runs on any PEMB-relevant page, not just pages typed as
+  structural notes. On the test drawings the design block sat on a sheet classified as
+  "specification", so wind speed, snow loads, and snow factors were skipped even though
+  the tolerant rules could read them. Now recovered: Basic Wind Speed (116 mph), Ground
+  and Roof Snow Load, Snow Exposure/Thermal factors, etc. The rules already tolerate the
+  "WIND SPEED (V ult): 116 MPH" / "GROUND SNOW LOAD (Pg): 10 PSF" parenthetical notation.
+- Deterministic code/load/seismic fields now prefer the validated regex value over
+  vision when they conflict. Vision had been confidently wrong on a dense notes sheet
+  (Risk Category IV where the sheet says III; the engineer's city instead of the project
+  site). Regex extracts these precisely, so it now wins for Risk Category, Site Class,
+  SDC, Building Code, wind speed, snow/live/collateral/dead loads, Ss/S1, snow factors,
+  and Project Address.
+- Total Square Feet is computed from building width x length when both are known, so a
+  vision misread (e.g. 257,025 sf for a 71 x 134 building) is replaced by the true
+  footprint (~9,526 sf), with the source note showing the calculation.
+- Schema note added so vision returns the overall project name from the title block, not
+  an individual sheet title (e.g. not "North Plant Floor Plan - HVAC Piping").
+
+Best practice: upload the spec book AND the drawings into one project. Each carries
+fields the other lacks (prose/scope from the spec, design numbers from the drawings).
+Fields appearing in both surface as conflicts for quick confirmation.
 ## v1.9.7 - Vision prioritization for large documents
 
 Makes the tool find the pages that matter in big, mixed documents.

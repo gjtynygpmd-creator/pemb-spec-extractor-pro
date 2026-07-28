@@ -81,6 +81,28 @@ def test_pemb_relevance_prioritization():
     ) is False
 
 
+def test_parenthetical_design_criteria_on_spec_page():
+    # v1.9.8: design-criteria extraction runs on relevant pages regardless of page type,
+    # and tolerates the "(Vult):" / "(Pg):" notation common on structural-notes sheets.
+    from app.services.document_analysis import extract_fields
+    text = (
+        "GENERAL STRUCTURAL NOTES\n"
+        "WIND SPEED (V ult): 116 MPH\n"
+        "GROUND SNOW LOAD (Pg): 10 PSF\n"
+        "RISK CATEGORY: III\nSITE CLASS: D\n"
+    )
+    got = {f["field_name"]: f["value"] for f in extract_fields(text, page_type="specification", division="13")}
+    assert got.get("Basic Wind Speed") == "116 mph"
+    assert got.get("Ground Snow Load") == "10 psf"
+
+
+def test_regex_preferred_over_vision_for_deterministic_fields():
+    from app.services.document_analysis import candidate_quality
+    rx = {"field_name": "Risk Category", "value": "III", "confidence": 0.95, "match_method": "design_criteria"}
+    vs = {"field_name": "Risk Category", "value": "IV", "confidence": 0.99, "match_method": "vision"}
+    assert candidate_quality(rx) > candidate_quality(vs)
+
+
 if __name__ == "__main__":
     test_spec_page_extracts_and_is_rich()
     test_eave_height_not_misread_as_wind_speed()

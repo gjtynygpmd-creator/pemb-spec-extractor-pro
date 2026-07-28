@@ -175,7 +175,7 @@
       "typical_source": "Title block, cover sheet",
       "origin": "Template",
       "required": true,
-      "notes": null
+      "notes": "The overall project name from the title block, not an individual sheet title such as a floor plan or piping plan."
     },
     {
       "field_id": "project_address",

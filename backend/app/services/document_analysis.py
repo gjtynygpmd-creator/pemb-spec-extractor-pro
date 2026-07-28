@@ -519,7 +519,28 @@ def candidate_quality(candidate: dict, page_type: str | None = None, division: s
         score -= 0.03
     if division in {"13", "07"} and candidate.get("category") in {"Envelope", "Insulation", "Accessories"}:
         score += 0.03
+    # For deterministic code/load/seismic values, the validated regex/design-criteria
+    # extraction is more reliable than vision, which can be confidently wrong on dense
+    # notes sheets (e.g. reading Risk Category IV where the sheet says III). Prefer the
+    # non-vision candidate for these specific fields when both exist.
+    if candidate.get("field_name") in _DETERMINISTIC_FIELDS:
+        if method == "vision":
+            score -= 0.05
+        elif method:
+            score += 0.06
     return max(0.0, min(1.0, score))
+
+
+_DETERMINISTIC_FIELDS = {
+    # raw regex names (quality_score is precomputed before canonicalization)
+    "Risk Category", "Site Class", "Seismic Design Category", "Building Code",
+    "Basic Wind Speed", "Wind Exposure", "Ground Snow Load", "Roof Snow Load",
+    "Roof Live Load", "Collateral Load", "Dead Load", "Ss", "S1",
+    "Snow Exposure Factor", "Thermal Factor", "Project Address",
+    # canonical schema names (vision candidates are scored after canonicalization)
+    "Seismic Site Class", "Building Code (IBC)", "Ss (Mapped Short-Period)",
+    "S1 (Mapped 1-Second)", "Snow Exposure Factor (Ce)", "Snow Thermal Factor (Ct)",
+}
 
 CORE_ESTIMATOR_FIELDS = {
     "Project Address", "Bid Due", "Building Width", "Building Length", "Total Square Feet",
@@ -861,7 +882,8 @@ def _extract_openings(text: str, page_type: str | None) -> list[dict]:
 def extract_page_intelligence(text: str, page_type: str | None = None, division: str | None = None) -> list[dict]:
     """Run specialized extraction passes based on the classified page type."""
     results: list[dict] = []
-    if page_type in {"structural_notes", "general_notes", "unclassified"}:
+    if (page_type in {"structural_notes", "general_notes", "unclassified", "specification"}
+            or division in {"13"} or page_is_pemb_relevant(text)):
         results.extend(_extract_design_criteria(text))
     if page_type == "specification" or division in {"07", "13"}:
         results.extend(_extract_spec_systems(text, division))

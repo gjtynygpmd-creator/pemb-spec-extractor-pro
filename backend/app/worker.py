@@ -325,6 +325,39 @@ def process_job(job_id: str):
                     db.commit()
 
             event(db, job, "extracting_fields", 84, "Consolidating source-backed PEMB fields")
+            # Compute Total Square Feet from width x length when both are known. Vision
+            # occasionally misreads an unrelated large number as the area (e.g. 257,025 sf
+            # for a 71 x 134 building); the footprint from the dimensions is authoritative.
+            def _feet_val(v):
+                import re as _re
+                if not v:
+                    return None
+                m = _re.search(r"(\d+(?:\.\d+)?)\s*(?:'|ft)?\s*[-\s]?\s*(\d+(?:\.\d+)?)?\s*(?:\"|in)?", str(v))
+                if not m:
+                    return None
+                try:
+                    ft = float(m.group(1)); inch = float(m.group(2)) if m.group(2) else 0.0
+                    return ft + inch / 12.0
+                except ValueError:
+                    return None
+            try:
+                w_c = (all_candidates.get("Building Width") or [None])[0]
+                l_c = (all_candidates.get("Building Length") or [None])[0]
+                if w_c and l_c:
+                    w = _feet_val(w_c["value"]); l = _feet_val(l_c["value"])
+                    if w and l and w * l > 0:
+                        sf = round(w * l)
+                        all_candidates["Total Square Feet"] = [{
+                            "category": "Building Geometry", "field_name": "Total Square Feet",
+                            "value": f"{sf:,} sf", "normalized_value": f"{sf:,} sf",
+                            "confidence": 0.9, "match_method": "computed",
+                            "source_excerpt": f"Computed from {w_c['value']} x {l_c['value']}",
+                            "source_file": w_c.get("source_file"), "source_page": w_c.get("source_page"),
+                            "source_sheet": w_c.get("source_sheet"),
+                        }]
+            except Exception:
+                pass
+
             # Drop generic regex fields when the specific schema fields are present, so a
             # sheet with BSW/FSW eave heights or front/back slopes doesn't also list a
             # redundant generic "Eave Height" / "Roof Slope" row.
@@ -409,7 +442,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.9.7 Vision Prioritization started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.9.8 Drawing Accuracy started; poll interval=%ss", POLL_SECONDS)
     while True:
         try:
             recover_stuck_jobs()
