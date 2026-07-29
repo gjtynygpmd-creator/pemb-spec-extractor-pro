@@ -1,3 +1,40 @@
+## v1.10.0 - Estimator merge (prompt + procurement schema)
+
+Folds the strong parts of the earlier single-shot Claude tool into this app, while
+keeping the scalable, OpenAI-on-Render architecture (no company-Anthropic dependency).
+
+- Upgraded the vision prompt with the proven estimator framing: it now tells the model
+  what document types to expect (ITB, ConstructConnect Insight report, quote form,
+  drawings, spec), to read all columns/tables/schedules, to ignore boilerplate (AIA
+  clauses, insurance lists, generic bidding instructions) unless they hold a value, to
+  keep values exactly as written with units, to ignore "-None-" placeholders, and never
+  to invent. This improves extraction quality across every document.
+- Expanded the schema from 90 to 117 fields, adding the procurement/bid context the
+  earlier tool captured and drawings-only runs lacked: owner, general contractor,
+  architect, structural/civil/MEP engineers, delivery method, bid/performance/payment
+  bonds, job number, estimator, market sector, county, scope summary, start date,
+  completion/duration, confirmed value, bid time; plus granular per-endwall bay spacing
+  and expandable flags, and frame/secondary finishes and roof/trim colors.
+- New fields are "Recommended" origin, so they do not change the required-field count.
+
+Recommended workflow unchanged: upload the spec book AND the drawings together. The spec
+now yields the procurement context, the drawings the design numbers.
+## v1.9.9 - Precision (Risk Category + identity)
+
+From the combined spec+drawings review.
+
+- Risk Category no longer picks up components-and-cladding table headers. On a wind-
+  pressure table a sheet lists "RISK CATEGORY IV" and "RISK CATEGORY I, II OR III" as
+  column headers; these were being read as the building's rating. The rules now require a
+  real assignment ("RISK CATEGORY: III") and reject bare headers and list continuations,
+  so the actual value (III, from the design-data block) is what comes through.
+- Project-identity fields (Customer, Project, Project Address) now prefer the earliest
+  cover/title page among credible candidates. On a large multi-firm set the same field
+  appears in many title blocks; later ones are usually a consultant's own name and office
+  address (e.g. the engineer's Omaha address instead of the Stillwater project site).
+
+Reminder: identity fields are still surfaced as conflicts for confirmation, and the spec
+book cover / bid request remains the most reliable source for them.
 ## v1.9.8 - Drawing accuracy (from the drawings-set review)
 
 Recovers design values that were present in the drawings but missed, and fixes cases

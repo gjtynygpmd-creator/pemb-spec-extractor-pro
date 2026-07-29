@@ -10,7 +10,25 @@
       "quote_number",
       "engineer_of_record",
       "building_use",
-      "jurisdiction_ahj"
+      "jurisdiction_ahj",
+      "job_number",
+      "estimator",
+      "market_sector",
+      "delivery_method",
+      "bid_time",
+      "start_date",
+      "completion_duration",
+      "confirmed_value",
+      "scope_summary",
+      "owner",
+      "owner_contact",
+      "general_contractor",
+      "architect",
+      "structural_engineer",
+      "civil_engineer",
+      "mep_engineer",
+      "bid_bond",
+      "performance_payment_bond"
     ],
     "Building Geometry": [
       "building_width",
@@ -28,7 +46,12 @@
       "parapet",
       "canopies_leantos",
       "mezzanine",
-      "crane_system"
+      "crane_system",
+      "sidewall_bay_spacing",
+      "right_ew_bay_spacing",
+      "left_ew_bay_spacing",
+      "right_ew_expandable",
+      "left_ew_expandable"
     ],
     "Roof System": [
       "roof_panel_type",
@@ -43,7 +66,11 @@
       "wall_panel_finish",
       "wainscot",
       "liner_panel",
-      "base_condition"
+      "base_condition",
+      "frame_finish",
+      "secondary_finish",
+      "roof_color",
+      "trim_color"
     ],
     "Insulation": [
       "roof_insulation",
@@ -278,7 +305,345 @@
       "typical_source": "Code data block",
       "origin": "Recommended",
       "required": false,
-      "notes": "Determines adopted code edition and local amendments."
+      "notes": "The project site address, not the architect or engineer office address. Determines adopted code edition and local amendments."
+    },
+    {
+      "field_id": "job_number",
+      "name": "Job / Project Number",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "free text",
+      "example": "011087.001",
+      "aliases": [
+        "job no",
+        "project no",
+        "drawing number"
+      ],
+      "typical_source": "Title block",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Internal or drawing job number."
+    },
+    {
+      "field_id": "estimator",
+      "name": "Estimator",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name",
+      "example": "",
+      "aliases": [
+        "estimator",
+        "prepared by"
+      ],
+      "typical_source": "Quote form",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "The estimator preparing the bid."
+    },
+    {
+      "field_id": "market_sector",
+      "name": "Market Sector",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "e.g. Industrial, Commercial, Warehouse, Agricultural",
+      "example": "Industrial",
+      "aliases": [
+        "sector",
+        "market",
+        "project type"
+      ],
+      "typical_source": "ITB, project report",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "delivery_method",
+      "name": "Delivery Method",
+      "category": "Project & Bid Info",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Design-Bid-Build",
+        "Design-Build",
+        "CM at Risk",
+        "Negotiated"
+      ],
+      "format": null,
+      "example": "Design-Bid-Build",
+      "aliases": [
+        "delivery method",
+        "procurement"
+      ],
+      "typical_source": "ITB, project report",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "bid_time",
+      "name": "Bid Time",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "time",
+      "example": "2:00 PM",
+      "aliases": [
+        "bid time",
+        "due time"
+      ],
+      "typical_source": "ITB",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Time of day bids are due."
+    },
+    {
+      "field_id": "start_date",
+      "name": "Start Date",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "date",
+      "example": "",
+      "aliases": [
+        "start date",
+        "NTP",
+        "notice to proceed"
+      ],
+      "typical_source": "ITB, schedule",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "completion_duration",
+      "name": "Completion / Duration",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "date or months",
+      "example": "",
+      "aliases": [
+        "completion",
+        "duration",
+        "schedule",
+        "substantial completion"
+      ],
+      "typical_source": "ITB, schedule",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "confirmed_value",
+      "name": "Confirmed Value",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "dollar amount",
+      "example": "",
+      "aliases": [
+        "project value",
+        "contract value",
+        "budget"
+      ],
+      "typical_source": "Project report",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Reported project value, if given."
+    },
+    {
+      "field_id": "scope_summary",
+      "name": "Scope Summary",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "free text",
+      "example": "",
+      "aliases": [
+        "scope",
+        "description of work",
+        "project scope"
+      ],
+      "typical_source": "ITB, project report",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Short description of the work scope."
+    },
+    {
+      "field_id": "owner",
+      "name": "Owner",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name",
+      "example": "Synthesia Technology Group",
+      "aliases": [
+        "owner",
+        "developer"
+      ],
+      "typical_source": "Title block, ITB",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "The building owner / developer."
+    },
+    {
+      "field_id": "owner_contact",
+      "name": "Owner Contact",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name / phone / email",
+      "example": "",
+      "aliases": [
+        "contact",
+        "point of contact"
+      ],
+      "typical_source": "ITB",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "general_contractor",
+      "name": "General Contractor",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name",
+      "example": "Lambert Construction",
+      "aliases": [
+        "GC",
+        "general contractor",
+        "CM"
+      ],
+      "typical_source": "Title block, ITB",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "The GC or CM, if identified."
+    },
+    {
+      "field_id": "architect",
+      "name": "Architect",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name / firm",
+      "example": "",
+      "aliases": [
+        "architect",
+        "architect of record",
+        "AOR"
+      ],
+      "typical_source": "Title block",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "structural_engineer",
+      "name": "Structural Engineer",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name / firm",
+      "example": "Schemmer",
+      "aliases": [
+        "SE",
+        "structural engineer",
+        "EOR"
+      ],
+      "typical_source": "Title block, stamp",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "civil_engineer",
+      "name": "Civil Engineer",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name / firm",
+      "example": "",
+      "aliases": [
+        "civil engineer"
+      ],
+      "typical_source": "Title block",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "mep_engineer",
+      "name": "MEP Engineer",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "name / firm",
+      "example": "",
+      "aliases": [
+        "MEP",
+        "mechanical electrical plumbing engineer"
+      ],
+      "typical_source": "Title block",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "bid_bond",
+      "name": "Bid Bond",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "Yes/No or %",
+      "example": "",
+      "aliases": [
+        "bid bond"
+      ],
+      "typical_source": "ITB, instructions to bidders",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Whether a bid bond is required."
+    },
+    {
+      "field_id": "performance_payment_bond",
+      "name": "Performance / Payment Bond",
+      "category": "Project & Bid Info",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "Yes/No or %",
+      "example": "",
+      "aliases": [
+        "P&P bond",
+        "performance bond",
+        "payment bond"
+      ],
+      "typical_source": "ITB",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Whether performance/payment bonds are required."
     },
     {
       "field_id": "building_width",
@@ -596,6 +961,102 @@
       "notes": "Cranes drive frame design; capture type and capacity."
     },
     {
+      "field_id": "sidewall_bay_spacing",
+      "name": "Sidewall Bay Spacing",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "ft",
+      "allowed_values": null,
+      "format": "list of bay widths",
+      "example": "25 @ 25'",
+      "aliases": [
+        "sidewall bays",
+        "sidewall spacing"
+      ],
+      "typical_source": "Sidewall framing elevation",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Frame line spacing along the sidewall."
+    },
+    {
+      "field_id": "right_ew_bay_spacing",
+      "name": "Right Endwall Bay Spacing",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "ft",
+      "allowed_values": null,
+      "format": "list of bay widths",
+      "example": "",
+      "aliases": [
+        "right endwall bays",
+        "REW spacing"
+      ],
+      "typical_source": "Endwall framing elevation",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "left_ew_bay_spacing",
+      "name": "Left Endwall Bay Spacing",
+      "category": "Building Geometry",
+      "type": "string",
+      "unit": "ft",
+      "allowed_values": null,
+      "format": "list of bay widths",
+      "example": "",
+      "aliases": [
+        "left endwall bays",
+        "LEW spacing"
+      ],
+      "typical_source": "Endwall framing elevation",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "right_ew_expandable",
+      "name": "Right Endwall Expandable",
+      "category": "Building Geometry",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Yes",
+        "No"
+      ],
+      "format": null,
+      "example": "No",
+      "aliases": [
+        "expandable",
+        "future expansion (right)"
+      ],
+      "typical_source": "Endwall framing notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "left_ew_expandable",
+      "name": "Left Endwall Expandable",
+      "category": "Building Geometry",
+      "type": "enum",
+      "unit": null,
+      "allowed_values": [
+        "Yes",
+        "No"
+      ],
+      "format": null,
+      "example": "No",
+      "aliases": [
+        "expandable",
+        "future expansion (left)"
+      ],
+      "typical_source": "Endwall framing notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
       "field_id": "roof_panel_type",
       "name": "Roof Panel Type",
       "category": "Roof System",
@@ -830,6 +1291,81 @@
       "origin": "Recommended",
       "required": false,
       "notes": "Affects base trim and closure."
+    },
+    {
+      "field_id": "frame_finish",
+      "name": "Primary Frame Finish",
+      "category": "Wall System",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "paint / finish",
+      "example": "Shop primer, red oxide",
+      "aliases": [
+        "frame finish",
+        "primer",
+        "paint",
+        "red oxide"
+      ],
+      "typical_source": "Spec, structural notes",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Primary structural steel finish."
+    },
+    {
+      "field_id": "secondary_finish",
+      "name": "Purlin / Girt Finish",
+      "category": "Wall System",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "galvanized / painted",
+      "example": "Galvanized",
+      "aliases": [
+        "purlin finish",
+        "girt finish",
+        "secondary finish"
+      ],
+      "typical_source": "Spec",
+      "origin": "Recommended",
+      "required": false,
+      "notes": "Finish of secondary members (purlins/girts)."
+    },
+    {
+      "field_id": "roof_color",
+      "name": "Roof Color",
+      "category": "Wall System",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "color",
+      "example": "",
+      "aliases": [
+        "roof color",
+        "roof panel color"
+      ],
+      "typical_source": "Finish schedule, elevations",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
+    },
+    {
+      "field_id": "trim_color",
+      "name": "Trim Color",
+      "category": "Wall System",
+      "type": "string",
+      "unit": null,
+      "allowed_values": null,
+      "format": "color",
+      "example": "",
+      "aliases": [
+        "trim color",
+        "flashing color"
+      ],
+      "typical_source": "Finish schedule",
+      "origin": "Recommended",
+      "required": false,
+      "notes": null
     },
     {
       "field_id": "roof_insulation",

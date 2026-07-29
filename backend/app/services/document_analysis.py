@@ -47,8 +47,12 @@ FIELD_RULES: tuple[FieldRule, ...] = (
         r"use\s+group\s*[:\-]?\s*([^\n.;]{2,60})",
     ), 0.82, ("structural_notes", "specification")),
     FieldRule("Codes & Loads", "Risk Category", (
-        r"risk\s+category(?:\s+of\s+building)?\s*[:\-=]?\s*(IV|III|II|I|[1-4])\b",
-        r"risk\s+category(?:\s+of\s+building)?\s*[-–—]\s*(IV|III|II|I|[1-4])\b",
+        # Require a real assignment (colon/equals/dash) and reject list continuations, so a
+        # components-and-cladding table header like "RISK CATEGORY IV" or
+        # "RISK CATEGORY I, II OR III" is not mistaken for the building's actual rating
+        # (which is written "RISK CATEGORY: III").
+        r"risk\s+category(?:\s+of\s+building)?\s*[:=]\s*(IV|III|II|I)\b(?!\s*,|\s+or\b|\s*[-–]\s*I)",
+        r"risk\s+category(?:\s+of\s+building)?\s*[-–—]\s*(IV|III|II|I)\b(?!\s*,|\s+or\b)",
     ), 0.94, ("structural_notes", "specification"), ("13",)),
     FieldRule("Codes & Loads", "Basic Wind Speed", (
         # v1.9.0: require the "mph" unit and bind on the same line only. Previously
@@ -247,7 +251,7 @@ GENERIC_LABEL_RULES: tuple[FieldRule, ...] = (
     FieldRule("Geometry", "Eave Height", (r"\beave\s+(?:ht\.?|height|elev\.?|elevation)[^\S\n]*[:=\-]?[^\S\n]*([^\n|]{2,40})",), 0.80),
     FieldRule("Geometry", "Roof Slope", (r"\broof\s+(?:slope|pitch)[^\S\n]*[:=\-]?[^\S\n]*([^\n|]{2,30})",), 0.82),
     FieldRule("Codes & Loads", "Building Code", (r"\b(?:applicable|governing|design)\s+(?:building\s+)?code[^\S\n]*[:=\-]?[^\S\n]*([^\n|]{4,90})",), 0.83),
-    FieldRule("Codes & Loads", "Risk Category", (r"\brisk\s+category[^\S\n]*[:=\-]?[^\S\n]*([^\n|]{1,18})",), 0.88),
+    FieldRule("Codes & Loads", "Risk Category", (r"\brisk\s+category[^\S\n]*[:=][^\S\n]*(IV|III|II|I)\b(?!\s*,|\s+or\b)",), 0.88),
     FieldRule("Codes & Loads", "Basic Wind Speed", (r"\b(?:ultimate\s+design\s+wind\s+speed|basic\s+wind\s+speed|wind\s+speed|vult)[^\S\n]*[:=\-]?[^\S\n]*([^\n|]{2,35})",), 0.86),
     FieldRule("Codes & Loads", "Wind Exposure", (r"\b(?:wind\s+)?exposure(?:\s+category)?[^\S\n]*[:=\-]?[^\S\n]*([^\n|]{1,20})",), 0.85),
     FieldRule("Codes & Loads", "Ground Snow Load", (r"\b(?:ground\s+snow\s+load|pg)[^\S\n]*[:=\-]?[^\S\n]*([^\n|]{1,30})",), 0.87),
@@ -746,7 +750,7 @@ def _extract_design_criteria(text: str) -> list[dict]:
         ("Codes & Loads", "Roof Live Load", r"ROOF\s+LIVE\s+LOAD\D{0,35}(\d+(?:\.\d+)?)\s*PSF", 0.96),
         ("Codes & Loads", "Basic Wind Speed", r"(?:WIND\s+SPEED(?:\s*\(3\s*SECOND\s*GUST\))?|V\s*ULT)\D{0,40}(\d{2,3})\s*MPH", 0.97),
         ("Codes & Loads", "Wind Exposure", r"(?:WIND\s+EXPOSURE|EXPOSURE\s+CATEGORY)[\s:=\-–—]*([BCD])\b", 0.94),
-        ("Codes & Loads", "Risk Category", r"RISK\s+CATEGORY\s*[:=\-]?\s*(IV|III|II|I|[1-4])\b", 0.95),
+        ("Codes & Loads", "Risk Category", r"RISK\s+CATEGORY\s*[:=]\s*(IV|III|II|I)\b(?!\s*,|\s+or\b|\s*[-–]\s*I)", 0.95),
         ("Codes & Loads", "Site Class", r"SITE\s+CLASS[\s:=\-–—]*([A-F])\b", 0.94),
         ("Codes & Loads", "Seismic Design Category", r"SEISMIC\s+DESIGN\s+CATEGORY[\s:=\-–—]*([A-F])\b", 0.97),
         ("Codes & Loads", "Ss", r"(?:MAPPED\s+SPECTRAL\s+ACCELERATION\D{0,30})?S\s*S\s*[:=]?\s*(0?\.\d+)", 0.94),

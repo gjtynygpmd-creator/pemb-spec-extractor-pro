@@ -1,4 +1,4 @@
-# PEMB Spec Extractor Pro v1.9.8 Drawing Accuracy
+# PEMB Spec Extractor Pro v1.10.0 Estimator Merge
 
 ## Insulation Core Release
 

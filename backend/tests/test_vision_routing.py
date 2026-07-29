@@ -103,6 +103,17 @@ def test_regex_preferred_over_vision_for_deterministic_fields():
     assert candidate_quality(rx) > candidate_quality(vs)
 
 
+def test_risk_category_ignores_table_headers():
+    # v1.9.9: an assigned value is read; C&C wind-table headers are not mistaken for it.
+    from app.services.document_analysis import extract_fields
+    def rc(text):
+        return [f["value"] for f in extract_fields(text, page_type="specification", division="13")
+                if f["field_name"] == "Risk Category"]
+    assert rc("RISK CATEGORY: III") == ["III"]
+    # bare header and a list header must not produce a value
+    assert rc("COMPONENTS & CLADDING\nRISK CATEGORY IV\nRISK CATEGORY I, II OR III") == []
+
+
 if __name__ == "__main__":
     test_spec_page_extracts_and_is_rich()
     test_eave_height_not_misread_as_wind_speed()

@@ -123,6 +123,11 @@ def claim_job():
         return job.id
 
 
+# Project-identity fields that should prefer the earliest (cover/title) page, since
+# later title blocks on a large set usually carry a consultant's own name and address.
+_IDENTITY_PAGE_PREF = {"Customer", "Project", "Project Address"}
+
+
 def _has_real_conflict(normalized_values) -> bool:
     """True only if two values genuinely disagree. Values where one contains the other
     after normalization (e.g. "clearspan" vs "clearspanrigidframe", "24ga" vs "24") are
@@ -369,11 +374,25 @@ def process_job(job_id: str):
             for field_name, candidates in all_candidates.items():
                 if field_name in manual_names:
                     continue
-                ranked = sorted(
-                    candidates,
-                    key=lambda c: (c.get("quality_score", candidate_quality(c)), c["confidence"], -len(c.get("value") or "")),
-                    reverse=True,
-                )
+                # Project-identity fields live on cover/title sheets near the front. On a
+                # large multi-firm set the same field appears in many title blocks (often
+                # a design firm's name/address). Among credible candidates, prefer the one
+                # from the earliest page, which is typically the project cover rather than a
+                # later consultant's stamp.
+                if field_name in _IDENTITY_PAGE_PREF:
+                    def _key(c):
+                        q = c.get("quality_score", candidate_quality(c))
+                        credible = c["confidence"] >= 0.80
+                        page = c.get("source_page") or 10_000
+                        # credible-first, then earliest page, then quality/confidence
+                        return (1 if credible else 0, -page if credible else 0, q, c["confidence"])
+                    ranked = sorted(candidates, key=_key, reverse=True)
+                else:
+                    ranked = sorted(
+                        candidates,
+                        key=lambda c: (c.get("quality_score", candidate_quality(c)), c["confidence"], -len(c.get("value") or "")),
+                        reverse=True,
+                    )
                 best = ranked[0]
                 best_score = best.get("quality_score", candidate_quality(best))
                 # Conflict only when two clean values genuinely disagree (neither contains
@@ -442,7 +461,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.9.8 Drawing Accuracy started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.10.0 Estimator Merge started; poll interval=%ss", POLL_SECONDS)
     while True:
         try:
             recover_stuck_jobs()
