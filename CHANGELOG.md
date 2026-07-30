@@ -1,3 +1,22 @@
+## v1.10.1 - Crash-loop hotfix (NUL bytes + missing rollback)
+
+Priority fix for a worker crash loop where jobs stalled mid-run (e.g. "page 52 of 328")
+and Render repeated "Instance failed - Exited with status 1" then "Service recovered".
+
+- Root cause 1: some PDF pages return text containing NUL (0x00) bytes, which Postgres
+  text columns reject, raising a DataError when a DocumentPage row was inserted.
+- Root cause 2: the insert failure left the session in a failed transaction, and the
+  outer failure handler reused it without rolling back, raising an unhandled
+  PendingRollbackError that exited the process (status 1) and produced the crash loop.
+- Fix 1: a _clean_text() sanitizer strips NUL bytes at the source (page text and block
+  text) and again defensively at every text insertion (page excerpt, extracted field
+  value/normalized/excerpt/sheet).
+- Fix 2: the outer handler now rolls back before reusing the session, and the entire
+  failure-recording block is wrapped so recording a failure can never crash the worker;
+  the stuck-job recovery sweep will re-queue or fail the job on a later poll instead.
+
+Note: this hotfix jumps ahead of the panel-gauge work, which is now v1.10.2, and the
+door/window schedule feature, now v1.10.3.
 ## v1.10.0 - Estimator merge (prompt + procurement schema)
 
 Folds the strong parts of the earlier single-shot Claude tool into this app, while

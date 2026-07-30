@@ -37,6 +37,18 @@ log = logging.getLogger("pemb-worker")
 POLL_SECONDS = int(os.getenv("WORKER_POLL_SECONDS", "8"))
 
 
+def _clean_text(value):
+    """Remove NUL bytes and other characters Postgres text columns reject.
+
+    Some PDF pages return text with embedded NUL (0x00) bytes via PyMuPDF. Postgres
+    text/varchar columns cannot store NUL, so inserting such text raised a DataError
+    mid-job, which (without a rollback) cascaded into a worker crash loop.
+    """
+    if value is None:
+        return value
+    return value.replace("\x00", "")
+
+
 def event(db, job, stage: str, progress: int, message: str):
     job.stage = stage
     job.progress = progress
@@ -201,17 +213,17 @@ def process_job(job_id: str):
                         current_page = index + 1
                         try:
                             page = document.load_page(index)
-                            text = page.get_text("text") or ""
+                            text = _clean_text(page.get_text("text")) or ""
                             text = text.strip()
                             # Cap pathological pages so regex and memory can't spike.
                             if len(text) > settings.page_text_char_cap:
                                 text = text[: settings.page_text_char_cap]
                             # Preserve block-level reading order for schedules, notes, and dimension callouts.
                             blocks = page.get_text("blocks") or []
-                            blocks_text = "\n".join(
+                            blocks_text = _clean_text("\n".join(
                                 str(block[4]).strip() for block in sorted(blocks, key=lambda b: (round(b[1] / 18), b[0]))
                                 if len(block) > 4 and str(block[4]).strip()
-                            )
+                            ))
                             if len(blocks_text) > settings.page_text_char_cap:
                                 blocks_text = blocks_text[: settings.page_text_char_cap]
                             page_type, division, sheet_number, sheet_title = classify_page(text)
@@ -282,7 +294,7 @@ def process_job(job_id: str):
                                 searchable_text=has_rich_text,
                                 ocr_required=(extraction_method == "no_fields"),
                                 text_length=len(text),
-                                text_excerpt=text[:4000] if text else None,
+                                text_excerpt=_clean_text(text[:4000]) if text else None,
                             ))
 
                             for candidate in page_candidates:
@@ -408,14 +420,14 @@ def process_job(job_id: str):
                     project_id=job.project_id,
                     category=best["category"],
                     field_name=field_name,
-                    value=best["value"],
-                    normalized_value=normalize_field_value(field_name, best["value"]),
+                    value=_clean_text(best["value"]),
+                    normalized_value=_clean_text(normalize_field_value(field_name, best["value"])),
                     confidence=best["confidence"],
                     status=status,
                     source_file=best["source_file"],
                     source_page=best["source_page"],
-                    source_sheet=best["source_sheet"],
-                    source_excerpt=best["source_excerpt"],
+                    source_sheet=_clean_text(best.get("source_sheet")),
+                    source_excerpt=_clean_text(best["source_excerpt"]),
                 ))
             db.commit()
 
@@ -450,18 +462,32 @@ def process_job(job_id: str):
             log.info("Completed job %s", job.id)
         except Exception as exc:
             log.exception("Job %s failed", job_id)
-            job.status = "failed"
-            job.stage = "failed"
-            job.error_message = str(exc)
-            job.message = f"Analysis failed: {exc}"
-            project.status = "analysis_failed"
-            db.add(ProcessingEvent(project_id=job.project_id, job_id=job.id, stage="failed", progress=job.progress or 0, message=job.message))
-            db.commit()
+            # The failing insert (e.g. a NUL-byte DataError) leaves the session in a failed
+            # transaction. Roll back before reusing it, or the failure-recording below would
+            # raise PendingRollbackError and crash the worker process (status 1 -> crash loop).
+            try:
+                db.rollback()
+                job.status = "failed"
+                job.stage = "failed"
+                job.error_message = str(exc)
+                job.message = f"Analysis failed: {exc}"
+                if project:
+                    project.status = "analysis_failed"
+                db.add(ProcessingEvent(project_id=job.project_id, job_id=job.id, stage="failed", progress=job.progress or 0, message=str(job.message)))
+                db.commit()
+            except Exception:
+                # Never let recording the failure crash the worker; the stuck-job recovery
+                # sweep will re-queue or fail this job on a later poll.
+                log.exception("Failed to record job failure for %s", job_id)
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.10.0 Estimator Merge started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.10.1 Crash Hotfix started; poll interval=%ss", POLL_SECONDS)
     while True:
         try:
             recover_stuck_jobs()
