@@ -210,14 +210,14 @@ def build_vision_instructions() -> str:
         if f.category != current:
             lines.append(f"\n[{f.category}]")
             current = f.category
-        parts = [f"- {f.field_id} ({f.name})", f"type={f.type}"]
-        if f.unit:
-            parts.append(f"unit={f.unit}")
+        # Keep each field line lean to reduce per-call tokens (117 fields x every page
+        # adds up). field_id + name is the anchor; enum options and a couple of aliases
+        # aid recognition. Type/unit/notes are omitted here; the top-level rules cover
+        # value fidelity, and trimming lets more pages fit under the rate limit.
+        parts = [f"- {f.field_id} ({f.name})"]
         if f.allowed_values:
-            parts.append("allowed=" + "|".join(f.allowed_values))
+            parts.append("one of: " + "|".join(f.allowed_values))
         if f.aliases:
-            parts.append("aka=" + ", ".join(f.aliases[:5]))
-        if f.notes:
-            parts.append(f"note={f.notes}")
+            parts.append("aka " + ", ".join(f.aliases[:2]))
         lines.append("  " + "; ".join(parts))
     return "\n".join(lines)

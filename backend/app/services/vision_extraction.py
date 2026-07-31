@@ -202,7 +202,7 @@ def _call_openai(b64_png: str) -> str:
     client = OpenAI(
         api_key=settings.openai_api_key,
         timeout=settings.vision_timeout_seconds,
-        max_retries=0,
+        max_retries=settings.vision_max_retries,
     )
     resp = client.chat.completions.create(
         model=settings.vision_model_openai,
@@ -231,7 +231,7 @@ def _call_anthropic(b64_png: str) -> str:
     client = anthropic.Anthropic(
         api_key=settings.anthropic_api_key,
         timeout=settings.vision_timeout_seconds,
-        max_retries=0,
+        max_retries=settings.vision_max_retries,
     )
     message = client.messages.create(
         model=settings.vision_model_anthropic,

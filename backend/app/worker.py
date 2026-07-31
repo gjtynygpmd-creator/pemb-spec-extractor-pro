@@ -4,7 +4,7 @@ import logging
 import os
 import tempfile
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import fitz
 from sqlalchemy import delete, select
@@ -77,7 +77,7 @@ def recover_stuck_jobs():
     heartbeat is older than worker_stale_seconds is retried, or marked failed once it
     has exhausted worker_max_attempts.
     """
-    cutoff = datetime.utcnow() - timedelta(seconds=settings.worker_stale_seconds)
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=settings.worker_stale_seconds)
     with SessionLocal() as db:
         stale = db.scalars(
             select(ProcessingJob)
@@ -126,7 +126,7 @@ def claim_job():
         job.stage = "claiming"
         job.progress = 1
         job.attempts = (job.attempts or 0) + 1
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc).replace(tzinfo=None)
         job.message = "Worker claimed analysis job"
         project = db.get(Project, job.project_id)
         if project:
@@ -450,7 +450,7 @@ def process_job(job_id: str):
             job.status = "completed"
             job.stage = "completed"
             job.progress = 100
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             job.message = (
                 f"Inspected {processed_files} PDF(s), {total_pages} page(s); "
                 f"{searchable_pages} via text, {vision_pages} via vision, {ocr_pages} with no fields; "
@@ -487,7 +487,7 @@ def process_job(job_id: str):
 
 def main():
     Base.metadata.create_all(bind=engine)
-    log.info("PEMB processing worker v1.10.1 Crash Hotfix started; poll interval=%ss", POLL_SECONDS)
+    log.info("PEMB processing worker v1.10.2 Throughput started; poll interval=%ss", POLL_SECONDS)
     while True:
         try:
             recover_stuck_jobs()

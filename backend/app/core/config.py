@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     # openai_api_key is defined above; anthropic_api_key below is only needed when
     # vision_provider is "anthropic".
     anthropic_api_key: str = ""
-    vision_model_openai: str = "gpt-4o"
+    # gpt-4o-mini is the default: it has vision, is far cheaper, and typically carries a
+    # much higher tokens-per-minute allowance than gpt-4o (and may be the only model an
+    # OpenAI project is allowed to use). Set VISION_MODEL_OPENAI=gpt-4o for maximum
+    # accuracy on hard sheets if the account/project permits it.
+    vision_model_openai: str = "gpt-4o-mini"
     vision_model_anthropic: str = "claude-opus-4-8"
     vision_dpi: int = 200
 
@@ -46,9 +50,12 @@ class Settings(BaseSettings):
     # Maximum times a job is retried after a stuck/crash recovery before it is
     # marked failed with a clear message.
     worker_max_attempts: int = 3
-    # Network timeout (seconds) for a single vision API call, with retries disabled,
-    # so a hung provider request fails fast instead of stalling the worker.
+    # Network timeout (seconds) for a single vision API call.
     vision_timeout_seconds: int = 60
+    # Retries per vision call. The OpenAI/Anthropic SDKs honor Retry-After on 429 rate
+    # limits and back off, so throttled pages are retried and read instead of dropped.
+    # The per-page wall-clock guard still bounds total time.
+    vision_max_retries: int = 4
     # Hard wall-clock guard (seconds) around a single page's render+vision step. A hang
     # (as opposed to an exception) is not caught by try/except; this bounds it so the
     # job moves on and the page is flagged for review.

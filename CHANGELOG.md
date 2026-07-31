@@ -1,3 +1,22 @@
+## v1.10.2 - Throughput (rate limits) 
+
+Fixes the OpenAI 429 rate-limit throttling that made large jobs crawl and dropped pages.
+
+- Default vision model is now gpt-4o-mini. It has vision, is far cheaper, and carries a
+  much higher tokens-per-minute allowance than gpt-4o (200,000 vs 30,000 TPM on the test
+  account). It is also, in this project's case, the only model the OpenAI project is
+  allowed to use, which is why gpt-4o calls were being throttled hard. Set
+  VISION_MODEL_OPENAI=gpt-4o to use the larger model where the account/project permits it.
+- Vision calls now retry with back-off on 429 (VISION_MAX_RETRIES, default 4). The SDK
+  honors the "try again in Xs" hint, so throttled pages are read on retry instead of being
+  silently dropped. The per-page wall-clock guard still bounds total time.
+- Trimmed the per-call prompt (the v1.10.0 rewrite had roughly doubled it). The field list
+  is leaner now (~10.6K vs ~17.3K chars), so each request uses fewer tokens and more pages
+  fit under the rate limit, at lower cost.
+- Cleaned up the harmless datetime.utcnow() deprecation warnings (behavior unchanged).
+
+Net effect on the test account: about 6-7x more pages per minute and far fewer 429s, with
+no OpenAI tier change required.
 ## v1.10.1 - Crash-loop hotfix (NUL bytes + missing rollback)
 
 Priority fix for a worker crash loop where jobs stalled mid-run (e.g. "page 52 of 328")

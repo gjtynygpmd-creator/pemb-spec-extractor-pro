@@ -1,4 +1,4 @@
-# PEMB Spec Extractor Pro v1.10.1 Crash Hotfix
+# PEMB Spec Extractor Pro v1.10.2 Throughput
 
 ## Insulation Core Release
 
